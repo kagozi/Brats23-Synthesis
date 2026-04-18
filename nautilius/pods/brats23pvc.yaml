@@ -1,0 +1,12 @@
+# nautilius/brats23pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: brats23-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: rook-cephfs

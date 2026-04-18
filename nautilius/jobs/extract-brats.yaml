@@ -1,0 +1,28 @@
+# extract-brats.yaml - Kubernetes Pod to extract BRATS dataset
+apiVersion: v1
+kind: Pod
+metadata:
+  name: extract-brats
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  containers:
+  - name: extractor
+    image: ubuntu:22.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        set -e
+        cd /pvc/data
+        echo "Creating extraction directory..."
+        mkdir -p brats23
+        echo "Extracting BRATS dataset..."
+        unzip -q MICCAI-BraTS2023.zip
+        echo "Extraction complete"
+    volumeMounts:
+    - name: brats23-pvc
+      mountPath: /pvc/data
+  volumes:
+  - name: brats23-pvc
+    persistentVolumeClaim:
+      claimName: brats23-pvc

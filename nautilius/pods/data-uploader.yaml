@@ -1,0 +1,17 @@
+# nautilius/pvc-uploader-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: brats23-uploader
+spec:
+  containers:
+    - name: uploader
+      image: ubuntu:22.04
+      command: ["bash", "-lc", "sleep infinity"]
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
