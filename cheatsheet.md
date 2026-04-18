@@ -1,64 +1,45 @@
-# Nautilus NRP — kubectl Cheatsheet for Brats23
+# Nautilus NRP — kubectl Cheatsheet for BraTS23
 
 ## One-time setup
 
 ```bash
 # 1. Create PVC (200Gi shared storage)
-kubectl apply -f nautilius/pvc-synthgrad.yml
-kubectl get pvc synthrad2025-pvc -w
-
-# 2. Create WandB secret (from .env key)
-kubectl create secret generic wandb-secret \
-    --from-literal=api-key=$(grep WANDB_API_KEY .env | cut -d= -f2)
-
-# 3. Verify secret
-kubectl get secret wandb-secret
+kubectl apply -f nautilius/pods/brats23pvc.yaml
+kubectl get pvc brats23-pvc -n gai-lina-group -w
 ```
 
 ## Upload data to PVC
 
 ```bash
 # Start uploader pod
-kubectl apply -f nautilius/pvc-uploader-pod.yaml
-kubectl get pod synthrad2025-uploader -w   # wait for Running
+kubectl apply -f nautilius/pods/data-uploader.yaml
+kubectl get pod brats23-uploader -n gai-lina-group -w   # wait for Running
 
-# Upload zip files (run from project root)
-kubectl cp ./data/synthRAD2025_Task1_Train.zip   synthrad2025-uploader:/pvc/data/
-kubectl cp ./data/synthRAD2025_Task1_Train_D.zip synthrad2025-uploader:/pvc/data/
-kubectl cp ./data/synthRAD2025_Task1_Val_Input.zip synthrad2025-uploader:/pvc/data/
+# Upload zip file (run from project root)
+kubectl cp ./data/MICCAI-BraTS2023.zip brats23-uploader:/pvc/data/ -n gai-lina-group
 
-# Shell into uploader to extract
-kubectl exec -it synthrad2025-uploader -- bash
-# Inside pod:
-cd /pvc/data
-apt-get update && apt-get install -y unzip
-unzip -q synthRAD2025_Task1_Train.zip
-unzip -q synthRAD2025_Task1_Train_D.zip
-unzip -q synthRAD2025_Task1_Val_Input.zip
-ls -la
-exit
+# Extract dataset via one-shot job
+kubectl apply -f nautilius/jobs/extract-brats.yaml
+kubectl logs -f pod/extract-brats -n gai-lina-group
 
-# Delete uploader pod when done
-kubectl delete pod synthrad2025-uploader
+# Verify extraction
+kubectl exec -n gai-lina-group brats23-uploader -- ls -lah /pvc/data/brats23/
+
+# Delete uploader and extractor pods when done
+kubectl delete pod brats23-uploader -n gai-lina-group
+kubectl delete pod extract-brats -n gai-lina-group
 ```
 
 ## Build & push Docker image
 
 ```bash
 # Option A: Manual (local Docker)
-docker build -t ghcr.io/kagozi/synthrad2025-train:latest \
+docker build -t ghcr.io/kagozi/brats23-train:latest \
     -f docker/Dockerfile.train .
-docker push ghcr.io/kagozi/synthrad2025-train:latest
+docker push ghcr.io/kagozi/brats23-train:latest
 
 # Option B: GitHub Actions (auto on push to main)
 git push origin main   # triggers .github/workflows/docker-build.yml
-```
-
-## Prepare CV folds (one-time)
-
-```bash
-kubectl apply -f nautilius/jobs/prepare-folds.yaml
-kubectl logs -f job/synthrad2025-prepare-folds
 ```
 
 ## Run training jobs
@@ -66,7 +47,7 @@ kubectl logs -f job/synthrad2025-prepare-folds
 ```bash
 # Single fold
 kubectl apply -f nautilius/jobs/train-fold0.yaml
-kubectl logs -f job/synthrad2025-train-fold0
+kubectl logs -f job/brats23-train-fold0 -n gai-lina-group
 
 # All 5 folds in parallel
 for i in 0 1 2 3 4; do
@@ -74,54 +55,47 @@ for i in 0 1 2 3 4; do
 done
 
 # Monitor all jobs
-kubectl get jobs -w
+kubectl get jobs -n gai-lina-group -w
 ```
 
 ## Monitor & debug
 
 ```bash
-# Check job status
-kubectl describe job synthrad2025-train-fold0
+# Check pod/job status
+kubectl describe pod brats23-uploader -n gai-lina-group
+kubectl describe job brats23-train-fold0 -n gai-lina-group
 
 # Follow logs
-kubectl logs -f job/synthrad2025-train-fold0
+kubectl logs -f job/brats23-train-fold0 -n gai-lina-group
 
 # Shell into a running job pod
-kubectl exec -it $(kubectl get pods -l job-name=synthrad2025-train-fold0 \
-    -o jsonpath='{.items[0].metadata.name}') -- bash
+kubectl exec -it $(kubectl get pods -n gai-lina-group -l job-name=brats23-train-fold0 \
+    -o jsonpath='{.items[0].metadata.name}') -n gai-lina-group -- bash
 
 # GPU check inside pod
 nvidia-smi
 
-# Check PVC contents
-kubectl exec synthrad2025-uploader -- ls -lah /pvc/checkpoints/
-kubectl exec synthrad2025-uploader -- ls -lah /pvc/data/splits/
+# Check PVC data contents
+kubectl exec -n gai-lina-group brats23-uploader -- ls -lah /pvc/data/brats23/
+kubectl exec -n gai-lina-group brats23-uploader -- ls -lah /pvc/checkpoints/
 ```
 
 ## Cleanup
 
 ```bash
 # Delete completed jobs
-kubectl delete job synthrad2025-train-fold0
+kubectl delete job brats23-train-fold0 -n gai-lina-group
 
-# Delete all synthrad jobs
-kubectl delete jobs -l app=synthrad2025
+# Delete all brats23 jobs
+kubectl delete jobs -l app=brats23 -n gai-lina-group
 
 # Delete PVC (WARNING: destroys all data)
-kubectl delete pvc synthrad2025-pvc
+kubectl delete pvc brats23-pvc -n gai-lina-group
 ```
 
 ## Copy results from PVC to local
 
 ```bash
 # Restart uploader pod first
-kubectl apply -f nautilius/pvc-uploader-pod.yaml
-kubectl get pod synthrad2025-uploader -w
-
-# Copy checkpoint
-kubectl cp synthrad2025-uploader:/pvc/checkpoints/baseline_unet2d/fold0_best.pth \
-    ./checkpoints/fold0_best.pth
-
-# Copy splits CSV
-kubectl cp synthrad2025-uploader:/pvc/data/splits/folds.csv ./data/splits/folds.csv
-```
+kubectl apply -f nautilius/pods/data-uploader.yaml
+kubectl get pod brats23-uploader -n gai-lina-group -w

@@ -10,6 +10,13 @@ spec:
     - name: uploader
       image: ubuntu:22.04
       command: ["bash", "-lc", "sleep infinity"]
+      resources:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+        limits:
+          cpu: "2"
+          memory: "4Gi"
       volumeMounts:
         - name: brats23-vol
           mountPath: /pvc
