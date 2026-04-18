@@ -13,12 +13,14 @@ spec:
     args:
       - |
         set -e
+        apt-get update -qq && apt-get install -y -qq unzip
         cd /pvc/data
         echo "Creating extraction directory..."
         mkdir -p brats23
         echo "Extracting BRATS dataset..."
-        unzip -q MICCAI-BraTS2023.zip
-        echo "Extraction complete"
+        unzip -q MICCAI-BraTS2023.zip -d brats23
+        echo "Extraction complete. Contents:"
+        ls -lah brats23/
     volumeMounts:
     - name: brats23-pvc
       mountPath: /pvc/data
