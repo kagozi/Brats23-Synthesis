@@ -30,13 +30,31 @@ kubectl delete pod brats23-uploader -n gai-lina-group
 kubectl delete pod extract-brats -n gai-lina-group
 ```
 
+## Inspect dataset on PVC
+
+```bash
+# Run inspection pod (installs nibabel, prints case counts + modality completeness)
+kubectl apply -f nautilius/jobs/inspect-brats.yaml
+kubectl logs -f pod/inspect-brats -n gai-lina-group
+
+# Clean up when done
+kubectl delete pod inspect-brats -n gai-lina-group
+```
+
+The script (`scripts/inspect_brats.py`) can also be run locally:
+
+```bash
+pip install nibabel numpy
+python scripts/inspect_brats.py --root /local/path/to/brats23
+```
+
 ## Build & push Docker image
 
 ```bash
 # Option A: Manual (local Docker)
-docker build -t ghcr.io/kagozi/brats23-train:latest \
+docker build -t ghcr.io/{your_name}/brats23-train:latest \
     -f docker/Dockerfile.train .
-docker push ghcr.io/kagozi/brats23-train:latest
+docker push ghcr.io/{your_name}/brats23-train:latest
 
 # Option B: GitHub Actions (auto on push to main)
 git push origin main   # triggers .github/workflows/docker-build.yml
@@ -45,15 +63,6 @@ git push origin main   # triggers .github/workflows/docker-build.yml
 ## Run training jobs
 
 ```bash
-# Single fold
-kubectl apply -f nautilius/jobs/train-fold0.yaml
-kubectl logs -f job/brats23-train-fold0 -n gai-lina-group
-
-# All 5 folds in parallel
-for i in 0 1 2 3 4; do
-    kubectl apply -f nautilius/jobs/train-fold${i}.yaml
-done
-
 # Monitor all jobs
 kubectl get jobs -n gai-lina-group -w
 ```
@@ -63,14 +72,7 @@ kubectl get jobs -n gai-lina-group -w
 ```bash
 # Check pod/job status
 kubectl describe pod brats23-uploader -n gai-lina-group
-kubectl describe job brats23-train-fold0 -n gai-lina-group
 
-# Follow logs
-kubectl logs -f job/brats23-train-fold0 -n gai-lina-group
-
-# Shell into a running job pod
-kubectl exec -it $(kubectl get pods -n gai-lina-group -l job-name=brats23-train-fold0 \
-    -o jsonpath='{.items[0].metadata.name}') -n gai-lina-group -- bash
 
 # GPU check inside pod
 nvidia-smi

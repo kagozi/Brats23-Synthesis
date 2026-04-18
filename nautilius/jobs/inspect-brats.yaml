@@ -1,0 +1,108 @@
+# inspect-brats.yaml — One-shot pod to inspect the BraTS 2023 dataset on the PVC.
+# Mirrors scripts/inspect_brats.py — keep them in sync if you edit the logic.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inspect-brats
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  containers:
+  - name: inspector
+    image: python:3.11-slim
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        set -e
+        pip install --quiet nibabel numpy
+
+        python - <<'PYEOF'
+        import os, sys
+        from collections import defaultdict
+        from pathlib import Path
+        import nibabel as nib
+        import numpy as np
+
+        MODALITIES = ["t1c", "t1n", "t2f", "t2w"]
+        SEG_SUFFIX  = "seg"
+        root = Path("/pvc/data/brats23")
+
+        print(f"\n{'='*60}")
+        print("BraTS 2023 Dataset Inspector")
+        print(f"Root: {root}")
+        print(f"{'='*60}\n")
+
+        if not root.exists():
+            print(f"ERROR: {root} does not exist. Has the zip been extracted?")
+            sys.exit(1)
+
+        print("Top-level contents:")
+        for item in sorted(root.iterdir()):
+            size = sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
+            prefix = "[DIR] " if item.is_dir() else "      "
+            print(f"  {prefix}{item.name}  ({size / 1e9:.2f} GB)")
+
+        case_dirs = sorted([
+            p for p in root.rglob("*")
+            if p.is_dir() and any(f.suffix in (".gz", ".nii") for f in p.iterdir() if f.is_file())
+        ])
+
+        print(f"\nTotal cases found: {len(case_dirs)}")
+        if not case_dirs:
+            print("No NIfTI files found — check extraction path.")
+            sys.exit(1)
+
+        missing = defaultdict(list)
+        has_seg = 0
+        for case in case_dirs:
+            files = {f.name for f in case.iterdir() if f.is_file()}
+            for mod in MODALITIES:
+                if not any(mod in f for f in files):
+                    missing[mod].append(case.name)
+            if any(SEG_SUFFIX in f for f in files):
+                has_seg += 1
+
+        print(f"\nModality completeness (out of {len(case_dirs)} cases):")
+        for mod in MODALITIES:
+            n_missing = len(missing[mod])
+            status = "OK" if n_missing == 0 else f"MISSING in {n_missing} cases"
+            print(f"  {mod:>5}: {status}")
+        print(f"  {'seg':>5}: present in {has_seg} cases")
+
+        if any(missing.values()):
+            print("\nCases with missing modalities:")
+            for mod, cases in missing.items():
+                for c in cases[:5]:
+                    print(f"  [{mod}] {c}")
+                if len(cases) > 5:
+                    print(f"  ... and {len(cases)-5} more")
+
+        sample_case = case_dirs[0]
+        nii_files = sorted(sample_case.glob("*.nii.gz"))
+        print(f"\nSample case: {sample_case.name}")
+        for nf in nii_files:
+            img = nib.load(str(nf))
+            arr = img.get_fdata()
+            print(f"  {nf.name}")
+            print(f"    shape={img.shape}  dtype={arr.dtype}  "
+                  f"min={arr.min():.1f}  max={arr.max():.1f}  "
+                  f"affine_det={np.linalg.det(img.affine):.3f}")
+
+        print(f"\n{'='*60}")
+        print("Inspection complete.")
+        print(f"{'='*60}\n")
+        PYEOF
+    volumeMounts:
+    - name: brats23-pvc
+      mountPath: /pvc/data
+  volumes:
+  - name: brats23-pvc
+    persistentVolumeClaim:
+      claimName: brats23-pvc
