@@ -1,0 +1,120 @@
+# nautilius/jobs/eval-cwdm.yaml
+#
+# Fast-CWDM synthesis evaluation pod.
+# Runs complete_dataset.py on the val or test split and logs
+# SSIM, PSNR, L1, MSE + visual comparisons to WandB.
+#
+# Prerequisites:
+#   - Training complete: checkpoints at /pvc/checkpoints/cwdm/brats_<mod>_*.pt
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/eval-cwdm.yaml
+#   kubectl logs -f pod/eval-cwdm -n gai-lina-group
+apiVersion: v1
+kind: Pod
+metadata:
+  name: eval-cwdm
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+
+  nodeSelector:
+    nautilus.io/linstor: "true"
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                  - NVIDIA-A100-SXM4-80GB
+                  - NVIDIA-A100-SXM4-40GB
+                  - NVIDIA-A100-PCIe-80GB
+                  - NVIDIA-A10
+                  - NVIDIA-A10G
+                  - NVIDIA-A40
+                  - NVIDIA-L40
+                  - NVIDIA-RTX-A6000
+                  - NVIDIA-GeForce-RTX-3090
+                  - NVIDIA-GeForce-RTX-4090
+                  - Tesla-V100-SXM2-32GB
+
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: PreferNoSchedule
+
+  containers:
+    - name: evaluator
+      image: ghcr.io/kagozi/brats23-cwdm:latest
+      imagePullPolicy: Always
+
+      env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: WANDB_PROJECT
+          value: "brats2023-cwdm"
+        - name: WANDB_MODE
+          value: "online"
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: api_key
+        - name: WANDB_ENTITY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: entity
+
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -e
+          echo "=== Fast-CWDM Synthesis Evaluation ==="
+          echo "Input dir   : /pvc/data/brats23/val"
+          echo "Checkpoints : /pvc/checkpoints/cwdm"
+
+          python scripts/complete_dataset.py \
+            --input_dir /pvc/data/brats23/val \
+            --output_dir /pvc/outputs/cwdm/val \
+            --checkpoint_dir /pvc/checkpoints/cwdm \
+            --device cuda:0 \
+            --evaluation_mode \
+            --evaluate_metrics \
+            --log_visual_samples \
+            --diffusion_steps 100
+
+          echo "=== Evaluation complete. Results at /pvc/outputs/cwdm/val ==="
+          ls -lah /pvc/outputs/cwdm/val/
+
+      resources:
+        requests:
+          memory: "24Gi"
+          cpu: "12"
+          nvidia.com/gpu: "1"
+        limits:
+          memory: "32Gi"
+          cpu: "16"
+          nvidia.com/gpu: "1"
+
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+        - name: dshm
+          mountPath: /dev/shm
+
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi

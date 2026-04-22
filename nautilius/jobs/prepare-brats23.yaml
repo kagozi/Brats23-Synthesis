@@ -15,6 +15,15 @@ metadata:
   namespace: gai-lina-group
 spec:
   restartPolicy: Never
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - gpn-cisco2-nautilus.greatplains.net
   containers:
     - name: preparer
       image: ubuntu:22.04
