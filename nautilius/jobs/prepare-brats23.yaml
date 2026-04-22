@@ -1,0 +1,114 @@
+# nautilius/jobs/prepare-brats23.yaml
+#
+# Extracts BraTS 2023 GLI training + validation data from brats2025-6 PVC,
+# combines all cases, then splits them 70% train / 10% val / 20% test (seed=42).
+#
+# Output layout on brats23-pvc:
+#   /pvc/data/brats23/train/      <- 70% of all cases
+#   /pvc/data/brats23/val/        <- 10% of all cases
+#   /pvc/data/brats23/test/       <- 20% of all cases
+#   /pvc/data/brats23/split.json  <- records which cases went where
+apiVersion: v1
+kind: Pod
+metadata:
+  name: prepare-brats23
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  containers:
+    - name: preparer
+      image: ubuntu:22.04
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -e
+          apt-get update -qq && apt-get install -y -qq python3
+
+          echo "=== Extracting training data ==="
+          mkdir -p /dst/data/brats23/all
+          tar -xzf /src/ASNR-MICCAI-BraTS2023-GLI-MET-TrainingData.tar.gz \
+              --strip-components=1 -C /dst/data/brats23/all
+          echo "Training extraction done."
+
+          echo "=== Extracting validation data ==="
+          tar -xzf /src/ASNR-MICCAI-BraTS2023-GLI-MET-ValidationData.tar.gz \
+              --strip-components=1 -C /dst/data/brats23/all
+          echo "Validation extraction done."
+
+          echo "=== Splitting 70/10/20 ==="
+          python3 - <<'PYEOF'
+          import os, json, random, shutil
+
+          all_dir   = "/dst/data/brats23/all"
+          train_dir = "/dst/data/brats23/train"
+          val_dir   = "/dst/data/brats23/val"
+          test_dir  = "/dst/data/brats23/test"
+          split_log = "/dst/data/brats23/split.json"
+
+          for d in [train_dir, val_dir, test_dir]:
+              os.makedirs(d, exist_ok=True)
+
+          cases = sorted(d for d in os.listdir(all_dir)
+                         if os.path.isdir(os.path.join(all_dir, d)))
+          print(f"Total cases found: {len(cases)}")
+
+          random.seed(42)
+          random.shuffle(cases)
+
+          n = len(cases)
+          n_test  = int(n * 0.20)
+          n_val   = int(n * 0.10)
+          n_train = n - n_test - n_val
+
+          train_cases = cases[:n_train]
+          val_cases   = cases[n_train:n_train + n_val]
+          test_cases  = cases[n_train + n_val:]
+
+          print(f"  train : {len(train_cases)}")
+          print(f"  val   : {len(val_cases)}")
+          print(f"  test  : {len(test_cases)}")
+
+          for case in train_cases:
+              shutil.move(os.path.join(all_dir, case), os.path.join(train_dir, case))
+          for case in val_cases:
+              shutil.move(os.path.join(all_dir, case), os.path.join(val_dir, case))
+          for case in test_cases:
+              shutil.move(os.path.join(all_dir, case), os.path.join(test_dir, case))
+
+          with open(split_log, "w") as f:
+              json.dump({"seed": 42,
+                         "total": n,
+                         "train": train_cases,
+                         "val": val_cases,
+                         "test": test_cases}, f, indent=2)
+
+          print("Split complete. Log written to split.json")
+          PYEOF
+
+          echo "=== Final layout ==="
+          echo "train cases : $(ls /dst/data/brats23/train | wc -l)"
+          echo "val cases   : $(ls /dst/data/brats23/val   | wc -l)"
+          echo "test cases  : $(ls /dst/data/brats23/test  | wc -l)"
+          ls -lah /dst/data/brats23/
+
+      resources:
+        requests:
+          cpu: "2"
+          memory: "4Gi"
+        limits:
+          cpu: "4"
+          memory: "8Gi"
+      volumeMounts:
+        - name: source-vol
+          mountPath: /src
+          readOnly: true
+        - name: dest-vol
+          mountPath: /dst
+  volumes:
+    - name: source-vol
+      persistentVolumeClaim:
+        claimName: brats2025-6
+        readOnly: true
+    - name: dest-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc

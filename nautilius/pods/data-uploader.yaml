@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: brats23-uploader
+  name: brats2025-6-uploader
   namespace: gai-lina-group
 spec:
   restartPolicy: Never
@@ -18,9 +18,9 @@ spec:
           cpu: "2"
           memory: "4Gi"
       volumeMounts:
-        - name: brats23-vol
+        - name: brats2025-6-vol
           mountPath: /pvc
   volumes:
-    - name: brats23-vol
+    - name: brats2025-6-vol
       persistentVolumeClaim:
-        claimName: brats23-pvc
+        claimName: brats2025-6

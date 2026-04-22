@@ -1,0 +1,49 @@
+# nautilius/jobs/nextcloud-download.yaml
+# Downloads MICCAI-BraTS2023.zip from NextCloud into the brats23-pvc.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nextcloud-download
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  containers:
+    - name: downloader
+      image: curlimages/curl:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          echo "Downloading MICCAI-BraTS2023.zip from NextCloud..."
+          curl -f -L \
+            -u "${NC_USER}:${NC_PASS}" \
+            "https://nextcloud.nrp-nautilus.io/remote.php/dav/files/${NC_USER}/MICCAI-BraTS2023.zip" \
+            -o /pvc/data/MICCAI-BraTS2023.zip \
+            --progress-bar
+          echo "Download complete. Verifying..."
+          ls -lh /pvc/data/MICCAI-BraTS2023.zip
+      env:
+        - name: NC_USER
+          valueFrom:
+            secretKeyRef:
+              name: nextcloud-credentials
+              key: username
+        - name: NC_PASS
+          valueFrom:
+            secretKeyRef:
+              name: nextcloud-credentials
+              key: password
+      resources:
+        requests:
+          cpu: "1"
+          memory: "512Mi"
+        limits:
+          cpu: "2"
+          memory: "1Gi"
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
