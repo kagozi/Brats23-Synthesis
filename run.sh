@@ -83,7 +83,7 @@ train_modality() {
         --lr_anneal_steps=600000 \
         --data_dir="$TRAIN_DIR" \
         --image_size=224 \
-        --use_fp16=False \
+        --use_fp16=True \
         --save_interval=500 \
         --log_interval=100 \
         --num_workers=8 \
