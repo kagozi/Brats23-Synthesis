@@ -933,11 +933,11 @@ def main():
                         help="Override diffusion steps (default: parse from checkpoint)")
     
     # Wandb arguments
-    parser.add_argument("--wandb_project", default="fast-cwmd-brats-inference",
+    parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "brats2023-cwdm"),
                         help="Wandb project name")
-    parser.add_argument("--wandb_entity", default="timgsereda",
+    parser.add_argument("--wandb_entity", default=os.environ.get("WANDB_ENTITY", None),
                         help="Wandb entity/username")
-    parser.add_argument("--wandb_mode", default="online", choices=["online", "offline", "disabled"],
+    parser.add_argument("--wandb_mode", default=os.environ.get("WANDB_MODE", "online"), choices=["online", "offline", "disabled"],
                         help="Wandb logging mode")
     parser.add_argument("--wandb_run_name", default=None,
                         help="Custom run name for wandb")

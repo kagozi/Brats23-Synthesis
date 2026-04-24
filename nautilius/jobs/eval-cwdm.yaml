@@ -89,7 +89,10 @@ spec:
             --evaluation_mode \
             --evaluate_metrics \
             --log_visual_samples \
-            --diffusion_steps 100
+            --diffusion_steps 100 \
+            --wandb_project "${WANDB_PROJECT}" \
+            --wandb_entity "${WANDB_ENTITY}" \
+            --wandb_mode "${WANDB_MODE}"
 
           echo "=== Evaluation complete. Results at /pvc/outputs/cwdm/val ==="
           ls -lah /pvc/outputs/cwdm/val/
