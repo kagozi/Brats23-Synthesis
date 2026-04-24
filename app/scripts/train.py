@@ -30,9 +30,10 @@ def main():
     random.seed(seed)
 
     # --- wandb integration ---
+    _wandb_entity = os.environ.get("WANDB_ENTITY", None) or None
     wandb.init(
         project=os.environ.get("WANDB_PROJECT", "brats2023-cwdm"),
-        entity=os.environ.get("WANDB_ENTITY", None),
+        entity=_wandb_entity,
         name=f"{args.contr}_{args.sample_schedule}_{args.diffusion_steps}steps",
         config=vars(args),
         mode=os.environ.get("WANDB_MODE", "online"),

@@ -71,8 +71,6 @@ spec:
           value: "brats2023-cwdm"
         - name: WANDB_MODE
           value: "online"
-        - name: CUDA_VISIBLE_DEVICES
-          value: "0"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: WANDB_API_KEY
@@ -165,8 +163,6 @@ spec:
           value: "brats2023-cwdm"
         - name: WANDB_MODE
           value: "online"
-        - name: CUDA_VISIBLE_DEVICES
-          value: "0"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: WANDB_API_KEY
@@ -259,8 +255,6 @@ spec:
           value: "brats2023-cwdm"
         - name: WANDB_MODE
           value: "online"
-        - name: CUDA_VISIBLE_DEVICES
-          value: "0"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: WANDB_API_KEY
@@ -353,8 +347,6 @@ spec:
           value: "brats2023-cwdm"
         - name: WANDB_MODE
           value: "online"
-        - name: CUDA_VISIBLE_DEVICES
-          value: "0"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: WANDB_API_KEY

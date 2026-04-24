@@ -54,8 +54,6 @@ spec:
       imagePullPolicy: Always
 
       env:
-        - name: CUDA_VISIBLE_DEVICES
-          value: "0"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: WANDB_PROJECT
