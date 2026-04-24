@@ -61,6 +61,7 @@ train_modality() {
     WANDB_PROJECT="$WANDB_PROJECT" \
     WANDB_ENTITY="${WANDB_ENTITY:-}" \
     CHECKPOINT_DIR="$CKPT_DIR" \
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
     python scripts/train.py \
         --dataset=brats \
         --num_channels=64 \
