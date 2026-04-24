@@ -1,19 +1,23 @@
 # nautilius/jobs/train-cwdm.yaml
 #
-# Fast-CWDM training pod — one pod per modality.
-# Data is pre-extracted by prepare-brats23.yaml into brats23-pvc.
-# Code is baked into ghcr.io/kagozi/brats23-cwdm:latest via CI/CD.
-#
-# To train all 4 modalities in parallel, apply this file 4 times
-# after changing metadata.name and TRAIN_MODALITY each time:
-#   t1n → train-cwdm-t1n
-#   t1c → train-cwdm-t1c
-#   t2w → train-cwdm-t2w
-#   t2f → train-cwdm-t2f
+# Fast-CWDM — all 4 modalities trained in parallel.
+# One pod per modality, all launched with a single kubectl apply.
 #
 # Deploy:
 #   kubectl apply -f nautilius/jobs/train-cwdm.yaml
+#
+# Monitor:
 #   kubectl logs -f pod/train-cwdm-t1n -n gai-lina-group
+#   kubectl logs -f pod/train-cwdm-t1c -n gai-lina-group
+#   kubectl logs -f pod/train-cwdm-t2w -n gai-lina-group
+#   kubectl logs -f pod/train-cwdm-t2f -n gai-lina-group
+
+# ── Shared env / volumes template (repeated per pod) ────────────────────────
+# Each pod is identical except: metadata.name and TRAIN_MODALITY
+
+# =============================================================================
+# t1n
+# =============================================================================
 apiVersion: v1
 kind: Pod
 metadata:
@@ -21,10 +25,8 @@ metadata:
   namespace: gai-lina-group
 spec:
   restartPolicy: Never
-
   nodeSelector:
     nautilus.io/linstor: "true"
-
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
@@ -44,30 +46,25 @@ spec:
                   - NVIDIA-GeForce-RTX-3090
                   - NVIDIA-GeForce-RTX-4090
                   - Tesla-V100-SXM2-32GB
-
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
     - key: nvidia.com/gpu
       operator: Exists
       effect: PreferNoSchedule
-
   containers:
     - name: trainer
       image: ghcr.io/kagozi/brats23-cwdm:latest
       imagePullPolicy: Always
-
       env:
         - name: TRAIN_MODALITY
-          value: "t1n"           # t1n | t1c | t2w | t2f
+          value: "t1n"
         - name: SAMPLE_STRATEGY
           value: "sampled"
         - name: TIMESTEPS
           value: "100"
         - name: TRAIN_DATA_DIR
           value: "/pvc/data/brats23/train"
-        - name: VAL_DATA_DIR
-          value: "/pvc/data/brats23/val"
         - name: CHECKPOINT_DIR
           value: "/pvc/checkpoints/cwdm"
         - name: WANDB_PROJECT
@@ -88,7 +85,6 @@ spec:
             secretKeyRef:
               name: wandb-credentials
               key: entity
-
       resources:
         requests:
           memory: "24Gi"
@@ -98,13 +94,293 @@ spec:
           memory: "32Gi"
           cpu: "16"
           nvidia.com/gpu: "1"
-
       volumeMounts:
         - name: brats23-vol
           mountPath: /pvc
         - name: dshm
           mountPath: /dev/shm
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi
 
+---
+# =============================================================================
+# t1c
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: train-cwdm-t1c
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    nautilus.io/linstor: "true"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                  - NVIDIA-A100-SXM4-80GB
+                  - NVIDIA-A100-SXM4-40GB
+                  - NVIDIA-A100-PCIe-80GB
+                  - NVIDIA-A10
+                  - NVIDIA-A10G
+                  - NVIDIA-A40
+                  - NVIDIA-L40
+                  - NVIDIA-RTX-A6000
+                  - NVIDIA-GeForce-RTX-3090
+                  - NVIDIA-GeForce-RTX-4090
+                  - Tesla-V100-SXM2-32GB
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: PreferNoSchedule
+  containers:
+    - name: trainer
+      image: ghcr.io/kagozi/brats23-cwdm:latest
+      imagePullPolicy: Always
+      env:
+        - name: TRAIN_MODALITY
+          value: "t1c"
+        - name: SAMPLE_STRATEGY
+          value: "sampled"
+        - name: TIMESTEPS
+          value: "100"
+        - name: TRAIN_DATA_DIR
+          value: "/pvc/data/brats23/train"
+        - name: CHECKPOINT_DIR
+          value: "/pvc/checkpoints/cwdm"
+        - name: WANDB_PROJECT
+          value: "brats2023-cwdm"
+        - name: WANDB_MODE
+          value: "online"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: api_key
+        - name: WANDB_ENTITY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: entity
+      resources:
+        requests:
+          memory: "24Gi"
+          cpu: "12"
+          nvidia.com/gpu: "1"
+        limits:
+          memory: "32Gi"
+          cpu: "16"
+          nvidia.com/gpu: "1"
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+        - name: dshm
+          mountPath: /dev/shm
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi
+
+---
+# =============================================================================
+# t2w
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: train-cwdm-t2w
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    nautilus.io/linstor: "true"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                  - NVIDIA-A100-SXM4-80GB
+                  - NVIDIA-A100-SXM4-40GB
+                  - NVIDIA-A100-PCIe-80GB
+                  - NVIDIA-A10
+                  - NVIDIA-A10G
+                  - NVIDIA-A40
+                  - NVIDIA-L40
+                  - NVIDIA-RTX-A6000
+                  - NVIDIA-GeForce-RTX-3090
+                  - NVIDIA-GeForce-RTX-4090
+                  - Tesla-V100-SXM2-32GB
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: PreferNoSchedule
+  containers:
+    - name: trainer
+      image: ghcr.io/kagozi/brats23-cwdm:latest
+      imagePullPolicy: Always
+      env:
+        - name: TRAIN_MODALITY
+          value: "t2w"
+        - name: SAMPLE_STRATEGY
+          value: "sampled"
+        - name: TIMESTEPS
+          value: "100"
+        - name: TRAIN_DATA_DIR
+          value: "/pvc/data/brats23/train"
+        - name: CHECKPOINT_DIR
+          value: "/pvc/checkpoints/cwdm"
+        - name: WANDB_PROJECT
+          value: "brats2023-cwdm"
+        - name: WANDB_MODE
+          value: "online"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: api_key
+        - name: WANDB_ENTITY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: entity
+      resources:
+        requests:
+          memory: "24Gi"
+          cpu: "12"
+          nvidia.com/gpu: "1"
+        limits:
+          memory: "32Gi"
+          cpu: "16"
+          nvidia.com/gpu: "1"
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+        - name: dshm
+          mountPath: /dev/shm
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi
+
+---
+# =============================================================================
+# t2f
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: train-cwdm-t2f
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    nautilus.io/linstor: "true"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                  - NVIDIA-A100-SXM4-80GB
+                  - NVIDIA-A100-SXM4-40GB
+                  - NVIDIA-A100-PCIe-80GB
+                  - NVIDIA-A10
+                  - NVIDIA-A10G
+                  - NVIDIA-A40
+                  - NVIDIA-L40
+                  - NVIDIA-RTX-A6000
+                  - NVIDIA-GeForce-RTX-3090
+                  - NVIDIA-GeForce-RTX-4090
+                  - Tesla-V100-SXM2-32GB
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: PreferNoSchedule
+  containers:
+    - name: trainer
+      image: ghcr.io/kagozi/brats23-cwdm:latest
+      imagePullPolicy: Always
+      env:
+        - name: TRAIN_MODALITY
+          value: "t2f"
+        - name: SAMPLE_STRATEGY
+          value: "sampled"
+        - name: TIMESTEPS
+          value: "100"
+        - name: TRAIN_DATA_DIR
+          value: "/pvc/data/brats23/train"
+        - name: CHECKPOINT_DIR
+          value: "/pvc/checkpoints/cwdm"
+        - name: WANDB_PROJECT
+          value: "brats2023-cwdm"
+        - name: WANDB_MODE
+          value: "online"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: api_key
+        - name: WANDB_ENTITY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-credentials
+              key: entity
+      resources:
+        requests:
+          memory: "24Gi"
+          cpu: "12"
+          nvidia.com/gpu: "1"
+        limits:
+          memory: "32Gi"
+          cpu: "16"
+          nvidia.com/gpu: "1"
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+        - name: dshm
+          mountPath: /dev/shm
   volumes:
     - name: brats23-vol
       persistentVolumeClaim:

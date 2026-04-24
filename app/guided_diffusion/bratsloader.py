@@ -33,9 +33,19 @@ class BRATSVolumes(torch.utils.data.Dataset):
                 datapoint = dict()
                 # extract all files as channels
                 for f in files:
-                    seqtype = f.split('-')[4].split('.')[0]
+                    # Skip macOS metadata files and non-NIfTI files
+                    if f.startswith('._') or not f.endswith('.nii.gz'):
+                        continue
+                    parts = f.split('-')
+                    if len(parts) < 5:
+                        continue
+                    seqtype = parts[4].split('.')[0]
+                    if seqtype not in self.seqtypes_set:
+                        continue
                     datapoint[seqtype] = os.path.join(root, f)
-                self.database.append(datapoint)
+                # Only add cases that have at least the 4 MRI modalities
+                if self.seqtypes_set - {'seg'} <= datapoint.keys():
+                    self.database.append(datapoint)
 
     def __getitem__(self, x):
         filedict = self.database[x]

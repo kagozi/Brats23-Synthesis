@@ -1,12 +1,18 @@
 # nautilius/jobs/prepare-brats23.yaml
 #
-# Extracts BraTS 2023 GLI training + validation data from brats2025-6 PVC,
-# combines all cases, then splits them 70% train / 10% val / 20% test (seed=42).
+# Extracts BraTS 2023 GLI TRAINING data only (1,251 cases, all have seg masks)
+# from brats2025-6 PVC, then splits 70% train / 10% val / 20% test (seed=42).
+#
+# ValidationData is intentionally excluded — it has no segmentation masks,
+# making downstream segmentation evaluation impossible on those cases.
+#
+# Uses Python tarfile streaming (one member at a time) to keep memory low.
+# Resumable: skips cases already extracted to /dst/data/brats23/all/.
 #
 # Output layout on brats23-pvc:
-#   /pvc/data/brats23/train/      <- 70% of all cases
-#   /pvc/data/brats23/val/        <- 10% of all cases
-#   /pvc/data/brats23/test/       <- 20% of all cases
+#   /pvc/data/brats23/train/      <- 70% (~876 cases, all with seg masks)
+#   /pvc/data/brats23/val/        <- 10% (~125 cases, all with seg masks)
+#   /pvc/data/brats23/test/       <- 20% (~250 cases, all with seg masks)
 #   /pvc/data/brats23/split.json  <- records which cases went where
 apiVersion: v1
 kind: Pod
@@ -15,15 +21,6 @@ metadata:
   namespace: gai-lina-group
 spec:
   restartPolicy: Never
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                  - gpn-cisco2-nautilus.greatplains.net
   containers:
     - name: preparer
       image: ubuntu:22.04
@@ -33,22 +30,54 @@ spec:
           set -e
           apt-get update -qq && apt-get install -y -qq python3
 
-          echo "=== Extracting training data ==="
-          mkdir -p /dst/data/brats23/all
-          tar -xzf /src/ASNR-MICCAI-BraTS2023-GLI-MET-TrainingData.tar.gz \
-              --strip-components=1 -C /dst/data/brats23/all
-          echo "Training extraction done."
-
-          echo "=== Extracting validation data ==="
-          tar -xzf /src/ASNR-MICCAI-BraTS2023-GLI-MET-ValidationData.tar.gz \
-              --strip-components=1 -C /dst/data/brats23/all
-          echo "Validation extraction done."
-
-          echo "=== Splitting 70/10/20 ==="
           python3 - <<'PYEOF'
-          import os, json, random, shutil
+          import tarfile, os, json, random, shutil, sys
 
-          all_dir   = "/dst/data/brats23/all"
+          src      = "/src/ASNR-MICCAI-BraTS2023-GLI-MET-TrainingData.tar.gz"
+          all_dir  = "/dst/data/brats23/all"
+          os.makedirs(all_dir, exist_ok=True)
+
+          # ── Streaming extraction (one member at a time, resumable) ──────────
+          print("=== Extracting training data (streaming, resumable) ===", flush=True)
+          already = set(os.listdir(all_dir))
+          print(f"Already extracted: {len(already)} cases — skipping those.", flush=True)
+
+          extracted = len(already)
+          skipped   = 0
+
+          with tarfile.open(src, "r:gz") as tf:
+              for member in tf:
+                  # Strip the top-level directory (e.g. ASNR-MICCAI-.../BraTS-GLI-X/file)
+                  parts = member.name.split("/", 1)
+                  if len(parts) < 2 or not parts[1]:
+                      continue                      # skip the root dir entry itself
+                  member.name = parts[1]            # rewrite: BraTS-GLI-X/file
+
+                  case = member.name.split("/")[0]
+                  if not case:
+                      continue
+
+                  if case in already:
+                      skipped += 1
+                      continue
+
+                  tf.extract(member, all_dir, set_attrs=False)
+
+                  # Count & report each newly completed case
+                  case_path = os.path.join(all_dir, case)
+                  if os.path.isdir(case_path) and case not in already:
+                      files = os.listdir(case_path)
+                      if len(files) >= 5:           # all 5 files present (t1n/t1c/t2w/t2f/seg)
+                          already.add(case)
+                          extracted += 1
+                          if extracted % 50 == 0 or extracted <= 10:
+                              print(f"  [{extracted}/1251] {case}", flush=True)
+
+          total = len(os.listdir(all_dir))
+          print(f"Extraction done: {total} cases in {all_dir}", flush=True)
+
+          # ── Split 70 / 10 / 20 ─────────────────────────────────────────────
+          print("=== Splitting 70/10/20 ===", flush=True)
           train_dir = "/dst/data/brats23/train"
           val_dir   = "/dst/data/brats23/val"
           test_dir  = "/dst/data/brats23/test"
@@ -59,23 +88,23 @@ spec:
 
           cases = sorted(d for d in os.listdir(all_dir)
                          if os.path.isdir(os.path.join(all_dir, d)))
-          print(f"Total cases found: {len(cases)}")
+          print(f"Total cases: {len(cases)}", flush=True)
 
           random.seed(42)
           random.shuffle(cases)
 
-          n = len(cases)
-          n_test  = int(n * 0.20)
-          n_val   = int(n * 0.10)
-          n_train = n - n_test - n_val
+          n        = len(cases)
+          n_test   = int(n * 0.20)
+          n_val    = int(n * 0.10)
+          n_train  = n - n_test - n_val
 
           train_cases = cases[:n_train]
           val_cases   = cases[n_train:n_train + n_val]
           test_cases  = cases[n_train + n_val:]
 
-          print(f"  train : {len(train_cases)}")
-          print(f"  val   : {len(val_cases)}")
-          print(f"  test  : {len(test_cases)}")
+          print(f"  train : {len(train_cases)}", flush=True)
+          print(f"  val   : {len(val_cases)}", flush=True)
+          print(f"  test  : {len(test_cases)}", flush=True)
 
           for case in train_cases:
               shutil.move(os.path.join(all_dir, case), os.path.join(train_dir, case))
@@ -85,34 +114,34 @@ spec:
               shutil.move(os.path.join(all_dir, case), os.path.join(test_dir, case))
 
           with open(split_log, "w") as f:
-              json.dump({"seed": 42,
-                         "total": n,
+              json.dump({"seed": 42, "total": n,
                          "train": train_cases,
-                         "val": val_cases,
-                         "test": test_cases}, f, indent=2)
+                         "val":   val_cases,
+                         "test":  test_cases}, f, indent=2)
 
-          print("Split complete. Log written to split.json")
+          print("Split complete. Log written to split.json", flush=True)
           PYEOF
 
           echo "=== Final layout ==="
-          echo "train cases : $(ls /dst/data/brats23/train | wc -l)"
-          echo "val cases   : $(ls /dst/data/brats23/val   | wc -l)"
-          echo "test cases  : $(ls /dst/data/brats23/test  | wc -l)"
-          ls -lah /dst/data/brats23/
+          echo "train : $(ls /dst/data/brats23/train | wc -l) cases"
+          echo "val   : $(ls /dst/data/brats23/val   | wc -l) cases"
+          echo "test  : $(ls /dst/data/brats23/test  | wc -l) cases"
 
       resources:
         requests:
-          cpu: "2"
-          memory: "4Gi"
-        limits:
           cpu: "4"
           memory: "8Gi"
+        limits:
+          cpu: "8"
+          memory: "16Gi"
+
       volumeMounts:
         - name: source-vol
           mountPath: /src
           readOnly: true
         - name: dest-vol
           mountPath: /dst
+
   volumes:
     - name: source-vol
       persistentVolumeClaim:

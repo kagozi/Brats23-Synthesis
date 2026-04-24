@@ -60,6 +60,7 @@ train_modality() {
 
     WANDB_PROJECT="$WANDB_PROJECT" \
     WANDB_ENTITY="${WANDB_ENTITY:-}" \
+    CHECKPOINT_DIR="$CKPT_DIR" \
     python scripts/train.py \
         --dataset=brats \
         --num_channels=64 \
@@ -81,15 +82,12 @@ train_modality() {
         --lr=1e-5 \
         --lr_anneal_steps=600000 \
         --data_dir="$TRAIN_DIR" \
-        --val_data_dir="$VAL_DIR" \
         --image_size=224 \
         --use_fp16=False \
         --save_interval=500 \
         --log_interval=100 \
         --num_workers=8 \
         --contr=$mod \
-        --predict_xstart=True \
-        --checkpoint_dir="$CKPT_DIR" \
         $RESUME_ARG
 }
 
