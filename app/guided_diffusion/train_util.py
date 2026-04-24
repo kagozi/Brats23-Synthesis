@@ -193,13 +193,18 @@ class TrainLoop:
             # --- Data loading ---
             data_load_start = time.time()
             if self.dataset in ['brats']:
-                try:
-                    batch = next(self.iterdatal)
-                    cond = {}
-                except StopIteration:
-                    self.iterdatal = iter(self.datal)
-                    batch = next(self.iterdatal)
-                    cond = {}
+                batch = None
+                while batch is None:
+                    try:
+                        batch = next(self.iterdatal)
+                        cond = {}
+                    except StopIteration:
+                        self.iterdatal = iter(self.datal)
+                        batch = next(self.iterdatal)
+                        cond = {}
+                    except Exception as e:
+                        print(f"[DataLoader] Skipping corrupted sample: {e}", flush=True)
+                        batch = None
             data_load_end = time.time()
             total_data_time += data_load_end - data_load_start
 
