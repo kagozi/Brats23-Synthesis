@@ -8,6 +8,8 @@ on:
       - 'Dockerfile'
       - 'requirements.txt'
       - 'run.sh'
+      - 'app/**'
+      - '.github/**'
 
 env:
   REGISTRY: ghcr.io
