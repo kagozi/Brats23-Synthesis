@@ -36,16 +36,7 @@ spec:
                 operator: In
                 values:
                   - NVIDIA-A100-SXM4-80GB
-                  - NVIDIA-A100-SXM4-40GB
                   - NVIDIA-A100-PCIe-80GB
-                  - NVIDIA-A10
-                  - NVIDIA-A10G
-                  - NVIDIA-A40
-                  - NVIDIA-L40
-                  - NVIDIA-RTX-A6000
-                  - NVIDIA-GeForce-RTX-3090
-                  - NVIDIA-GeForce-RTX-4090
-                  - Tesla-V100-SXM2-32GB
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -85,11 +76,11 @@ spec:
               key: entity
       resources:
         requests:
-          memory: "24Gi"
+          memory: "48Gi"
           cpu: "12"
           nvidia.com/gpu: "1"
         limits:
-          memory: "32Gi"
+          memory: "64Gi"
           cpu: "16"
           nvidia.com/gpu: "1"
       volumeMounts:
@@ -128,16 +119,7 @@ spec:
                 operator: In
                 values:
                   - NVIDIA-A100-SXM4-80GB
-                  - NVIDIA-A100-SXM4-40GB
                   - NVIDIA-A100-PCIe-80GB
-                  - NVIDIA-A10
-                  - NVIDIA-A10G
-                  - NVIDIA-A40
-                  - NVIDIA-L40
-                  - NVIDIA-RTX-A6000
-                  - NVIDIA-GeForce-RTX-3090
-                  - NVIDIA-GeForce-RTX-4090
-                  - Tesla-V100-SXM2-32GB
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -177,11 +159,11 @@ spec:
               key: entity
       resources:
         requests:
-          memory: "24Gi"
+          memory: "48Gi"
           cpu: "12"
           nvidia.com/gpu: "1"
         limits:
-          memory: "32Gi"
+          memory: "64Gi"
           cpu: "16"
           nvidia.com/gpu: "1"
       volumeMounts:
@@ -220,16 +202,7 @@ spec:
                 operator: In
                 values:
                   - NVIDIA-A100-SXM4-80GB
-                  - NVIDIA-A100-SXM4-40GB
                   - NVIDIA-A100-PCIe-80GB
-                  - NVIDIA-A10
-                  - NVIDIA-A10G
-                  - NVIDIA-A40
-                  - NVIDIA-L40
-                  - NVIDIA-RTX-A6000
-                  - NVIDIA-GeForce-RTX-3090
-                  - NVIDIA-GeForce-RTX-4090
-                  - Tesla-V100-SXM2-32GB
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -269,11 +242,11 @@ spec:
               key: entity
       resources:
         requests:
-          memory: "24Gi"
+          memory: "48Gi"
           cpu: "12"
           nvidia.com/gpu: "1"
         limits:
-          memory: "32Gi"
+          memory: "64Gi"
           cpu: "16"
           nvidia.com/gpu: "1"
       volumeMounts:
@@ -312,16 +285,7 @@ spec:
                 operator: In
                 values:
                   - NVIDIA-A100-SXM4-80GB
-                  - NVIDIA-A100-SXM4-40GB
                   - NVIDIA-A100-PCIe-80GB
-                  - NVIDIA-A10
-                  - NVIDIA-A10G
-                  - NVIDIA-A40
-                  - NVIDIA-L40
-                  - NVIDIA-RTX-A6000
-                  - NVIDIA-GeForce-RTX-3090
-                  - NVIDIA-GeForce-RTX-4090
-                  - Tesla-V100-SXM2-32GB
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -361,11 +325,11 @@ spec:
               key: entity
       resources:
         requests:
-          memory: "24Gi"
+          memory: "48Gi"
           cpu: "12"
           nvidia.com/gpu: "1"
         limits:
-          memory: "32Gi"
+          memory: "64Gi"
           cpu: "16"
           nvidia.com/gpu: "1"
       volumeMounts:

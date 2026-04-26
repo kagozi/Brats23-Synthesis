@@ -1191,21 +1191,20 @@ class GaussianDiffusion:
         # Calculate MSE loss (for training stability)
         mse_loss = th.mean(mean_flat((x_start_dwt - model_output) ** 2))
         
-        # Calculate SSIM loss in wavelet domain (for challenge performance)
+        # Calculate SSIM loss in wavelet domain (for logging; no_grad since weight=0)
         try:
-            # SSIM on wavelet coefficients - DIFFERENTIABLE for gradients
-            ssim_score = self.ssim_metric(
-                y_pred=model_output.contiguous(),      # Model prediction [B, 8, H, W, D]
-                y=x_start_dwt.contiguous()            # Ground truth [B, 8, H, W, D]
-            ).mean()  # Keep as tensor for gradients
-            
-            # Convert SSIM to loss (1 - SSIM, so lower is better)
+            with th.no_grad():
+                ssim_score = self.ssim_metric(
+                    y_pred=model_output.detach().contiguous(),
+                    y=x_start_dwt.detach().contiguous()
+                ).mean()
             ssim_loss = 1.0 - ssim_score
-            
+
         except Exception as e:
-            print(f"SSIM calculation failed: {e}")
-            ssim_score = th.tensor(0.0, device=mse_loss.device)  # Fallback
-            ssim_loss = th.tensor(1.0, device=mse_loss.device)   # Worst SSIM loss
+            print(f"SSIM calculation failed: {e}", flush=True)
+            th.cuda.empty_cache()
+            ssim_score = th.tensor(0.0, device=mse_loss.device)
+            ssim_loss = th.tensor(1.0, device=mse_loss.device)
         
         # Hybrid loss: combine MSE (stability) + SSIM (challenge performance)
         hybrid_loss = self.mse_loss_weight * mse_loss + self.ssim_loss_weight * ssim_loss
