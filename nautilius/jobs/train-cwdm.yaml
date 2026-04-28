@@ -29,35 +29,12 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu.product
-                    operator: In
-                    values:
-                      - NVIDIA-A100-SXM4-80GB
-                      - NVIDIA-A100-SXM4-40GB
-                      - NVIDIA-A100-PCIe-80GB
-                      - NVIDIA-A40
-                      - NVIDIA-L40
-                      - NVIDIA-L40S
-                      - NVIDIA-RTX-A6000
-                      - NVIDIA-A10
-                      - NVIDIA-A10G
-                      - NVIDIA-GeForce-RTX-3090
-                      - NVIDIA-GeForce-RTX-4090
-                      - Tesla-V100-SXM2-32GB
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
-        - key: nautilus.io/reservation
-          operator: Exists
-          effect: NoSchedule
       containers:
         - name: trainer
           image: ghcr.io/kagozi/brats23-cwdm:latest
@@ -91,13 +68,15 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "24Gi"
-              cpu: "8"
-              nvidia.com/gpu: "1"
-            limits:
-              memory: "32Gi"
+              memory: "20Gi"
               cpu: "12"
               nvidia.com/gpu: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "12"
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
               mountPath: /pvc
@@ -126,35 +105,12 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu.product
-                    operator: In
-                    values:
-                      - NVIDIA-A100-SXM4-80GB
-                      - NVIDIA-A100-SXM4-40GB
-                      - NVIDIA-A100-PCIe-80GB
-                      - NVIDIA-A40
-                      - NVIDIA-L40
-                      - NVIDIA-L40S
-                      - NVIDIA-RTX-A6000
-                      - NVIDIA-A10
-                      - NVIDIA-A10G
-                      - NVIDIA-GeForce-RTX-3090
-                      - NVIDIA-GeForce-RTX-4090
-                      - Tesla-V100-SXM2-32GB
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
-        - key: nautilus.io/reservation
-          operator: Exists
-          effect: NoSchedule
       containers:
         - name: trainer
           image: ghcr.io/kagozi/brats23-cwdm:latest
@@ -188,13 +144,15 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "24Gi"
-              cpu: "8"
-              nvidia.com/gpu: "1"
-            limits:
-              memory: "32Gi"
+              memory: "20Gi"
               cpu: "12"
               nvidia.com/gpu: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "12"
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
               mountPath: /pvc
@@ -223,35 +181,12 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu.product
-                    operator: In
-                    values:
-                      - NVIDIA-A100-SXM4-80GB
-                      - NVIDIA-A100-SXM4-40GB
-                      - NVIDIA-A100-PCIe-80GB
-                      - NVIDIA-A40
-                      - NVIDIA-L40
-                      - NVIDIA-L40S
-                      - NVIDIA-RTX-A6000
-                      - NVIDIA-A10
-                      - NVIDIA-A10G
-                      - NVIDIA-GeForce-RTX-3090
-                      - NVIDIA-GeForce-RTX-4090
-                      - Tesla-V100-SXM2-32GB
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
-        - key: nautilus.io/reservation
-          operator: Exists
-          effect: NoSchedule
       containers:
         - name: trainer
           image: ghcr.io/kagozi/brats23-cwdm:latest
@@ -285,13 +220,15 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "24Gi"
-              cpu: "8"
-              nvidia.com/gpu: "1"
-            limits:
-              memory: "32Gi"
+              memory: "20Gi"
               cpu: "12"
               nvidia.com/gpu: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "12"
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
               mountPath: /pvc
@@ -320,35 +257,12 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu.product
-                    operator: In
-                    values:
-                      - NVIDIA-A100-SXM4-80GB
-                      - NVIDIA-A100-SXM4-40GB
-                      - NVIDIA-A100-PCIe-80GB
-                      - NVIDIA-A40
-                      - NVIDIA-L40
-                      - NVIDIA-L40S
-                      - NVIDIA-RTX-A6000
-                      - NVIDIA-A10
-                      - NVIDIA-A10G
-                      - NVIDIA-GeForce-RTX-3090
-                      - NVIDIA-GeForce-RTX-4090
-                      - Tesla-V100-SXM2-32GB
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
-        - key: nautilus.io/reservation
-          operator: Exists
-          effect: NoSchedule
       containers:
         - name: trainer
           image: ghcr.io/kagozi/brats23-cwdm:latest
@@ -382,13 +296,15 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "24Gi"
-              cpu: "8"
-              nvidia.com/gpu: "1"
-            limits:
-              memory: "32Gi"
+              memory: "20Gi"
               cpu: "12"
               nvidia.com/gpu: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "12"
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
               mountPath: /pvc
