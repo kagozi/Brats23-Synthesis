@@ -217,9 +217,24 @@ class TrainLoop:
             else:
                 batch = batch.to(dist_util.dev())
 
-            # --- Model forward/backward ---
+            # --- Model forward/backward (with OOM recovery) ---
             step_proc_start = time.time()
-            ssim_score, sample, sample_idwt = self.run_step(batch, cond)  # MODIFIED: now returns SSIM
+            oom_retries = 0
+            while True:
+                try:
+                    ssim_score, sample, sample_idwt = self.run_step(batch, cond)
+                    break
+                except th.cuda.OutOfMemoryError:
+                    oom_retries += 1
+                    th.cuda.empty_cache()
+                    print(f"[OOM] Step {self.step + self.resume_step}: GPU OOM, cleared cache (retry {oom_retries})", flush=True)
+                    if oom_retries >= 3:
+                        print("[OOM] 3 retries failed, skipping step.", flush=True)
+                        ssim_score, sample, sample_idwt = 0.0, None, None
+                        self.step += 1
+                        break
+            if sample is None:
+                continue
             step_proc_end = time.time()
             total_step_time += step_proc_end - step_proc_start
 
