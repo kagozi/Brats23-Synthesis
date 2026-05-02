@@ -97,13 +97,13 @@ spec:
 
       resources:
         requests:
-          memory: "24Gi"
-          cpu: "12"
-          nvidia.com/gpu: "1"
+          memory: "16Gi"
+          cpu: "6"
+          nvidia.com/a100: "1"
         limits:
-          memory: "32Gi"
-          cpu: "16"
-          nvidia.com/gpu: "1"
+          memory: "19Gi"
+          cpu: "7"
+          nvidia.com/a100: "1"
 
       volumeMounts:
         - name: brats23-vol

@@ -32,8 +32,6 @@ spec:
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
-        - key: nvidia.com/gpu
-          operator: Exists
           effect: PreferNoSchedule
       containers:
         - name: trainer
@@ -68,14 +66,14 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "20Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "16Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "24Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "19Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
@@ -106,8 +104,6 @@ spec:
     spec:
       restartPolicy: Never
       tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
@@ -144,14 +140,14 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "20Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "16Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "24Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "19Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
@@ -182,8 +178,6 @@ spec:
     spec:
       restartPolicy: Never
       tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
@@ -220,14 +214,14 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "20Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "16Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "24Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "19Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol
@@ -258,8 +252,6 @@ spec:
     spec:
       restartPolicy: Never
       tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
         - key: nvidia.com/gpu
           operator: Exists
           effect: PreferNoSchedule
@@ -296,14 +288,14 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "20Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "16Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "24Gi"
-              cpu: "12"
-              nvidia.com/gpu: "1"
+              memory: "19Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:
             - name: brats23-vol

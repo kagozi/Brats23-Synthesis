@@ -64,7 +64,7 @@ train_modality() {
     PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
     python scripts/train.py \
         --dataset=brats \
-        --num_channels=32 \
+        --num_channels=64 \
         --class_cond=False \
         --num_res_blocks=2 \
         --num_heads=1 \
