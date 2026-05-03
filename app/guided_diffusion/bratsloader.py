@@ -4,6 +4,7 @@ import torch.utils.data
 import numpy as np
 import os
 import os.path
+import zlib
 import nibabel
 
 class BRATSVolumes(torch.utils.data.Dataset):
@@ -53,41 +54,61 @@ class BRATSVolumes(torch.utils.data.Dataset):
 
         # Load data
         if 't1n' in filedict:
-            t1n_np = nibabel.load(filedict['t1n']).get_fdata()
-            t1n_np_clipnorm = clip_and_normalize(t1n_np)
-            t1n = torch.zeros(1, 240, 240, 160)
-            t1n[:, :, :, :155] = torch.tensor(t1n_np_clipnorm)
-            t1n = t1n[:, 8:-8, 8:-8, :]
+            try:
+                t1n_np = nibabel.load(filedict['t1n']).get_fdata()
+                t1n_np_clipnorm = clip_and_normalize(t1n_np)
+                t1n = torch.zeros(1, 240, 240, 160)
+                t1n[:, :, :, :155] = torch.tensor(t1n_np_clipnorm)
+                t1n = t1n[:, 8:-8, 8:-8, :]
+            except (zlib.error, OSError, EOFError) as e:
+                print(f"[SKIP] Corrupted t1n file {filedict['t1n']}: {e}")
+                missing = 't1n'
+                t1n = torch.zeros(1)
         else:
             missing = 't1n'
             t1n = torch.zeros(1)
 
         if 't1c' in filedict:
-            t1c_np = nibabel.load(filedict['t1c']).get_fdata()
-            t1c_np_clipnorm = clip_and_normalize(t1c_np)
-            t1c = torch.zeros(1, 240, 240, 160)
-            t1c[:, :, :, :155] = torch.tensor(t1c_np_clipnorm)
-            t1c = t1c[:, 8:-8, 8:-8, :]
+            try:
+                t1c_np = nibabel.load(filedict['t1c']).get_fdata()
+                t1c_np_clipnorm = clip_and_normalize(t1c_np)
+                t1c = torch.zeros(1, 240, 240, 160)
+                t1c[:, :, :, :155] = torch.tensor(t1c_np_clipnorm)
+                t1c = t1c[:, 8:-8, 8:-8, :]
+            except (zlib.error, OSError, EOFError) as e:
+                print(f"[SKIP] Corrupted t1c file {filedict['t1c']}: {e}")
+                missing = 't1c'
+                t1c = torch.zeros(1)
         else:
             missing = 't1c'
             t1c = torch.zeros(1)
 
         if 't2w' in filedict:
-            t2w_np = nibabel.load(filedict['t2w']).get_fdata()
-            t2w_np_clipnorm = clip_and_normalize(t2w_np)
-            t2w = torch.zeros(1, 240, 240, 160)
-            t2w[:, :, :, :155] = torch.tensor(t2w_np_clipnorm)
-            t2w = t2w[:, 8:-8, 8:-8, :]
+            try:
+                t2w_np = nibabel.load(filedict['t2w']).get_fdata()
+                t2w_np_clipnorm = clip_and_normalize(t2w_np)
+                t2w = torch.zeros(1, 240, 240, 160)
+                t2w[:, :, :, :155] = torch.tensor(t2w_np_clipnorm)
+                t2w = t2w[:, 8:-8, 8:-8, :]
+            except (zlib.error, OSError, EOFError) as e:
+                print(f"[SKIP] Corrupted t2w file {filedict['t2w']}: {e}")
+                missing = 't2w'
+                t2w = torch.zeros(1)
         else:
             missing = 't2w'
             t2w = torch.zeros(1)
 
         if 't2f' in filedict:
-            t2f_np = nibabel.load(filedict['t2f']).get_fdata()
-            t2f_np_clipnorm = clip_and_normalize(t2f_np)
-            t2f = torch.zeros(1, 240, 240, 160)
-            t2f[:, :, :, :155] = torch.tensor(t2f_np_clipnorm)
-            t2f = t2f[:, 8:-8, 8:-8, :]
+            try:
+                t2f_np = nibabel.load(filedict['t2f']).get_fdata()
+                t2f_np_clipnorm = clip_and_normalize(t2f_np)
+                t2f = torch.zeros(1, 240, 240, 160)
+                t2f[:, :, :, :155] = torch.tensor(t2f_np_clipnorm)
+                t2f = t2f[:, 8:-8, 8:-8, :]
+            except (zlib.error, OSError, EOFError) as e:
+                print(f"[SKIP] Corrupted t2f file {filedict['t2f']}: {e}")
+                missing = 't2f'
+                t2f = torch.zeros(1)
         else:
             missing = 't2f'
             t2f = torch.zeros(1)
