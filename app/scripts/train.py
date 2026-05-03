@@ -98,6 +98,11 @@ def main():
         diffusion_steps=args.diffusion_steps,
     ).run_loop()
 
+    try:
+        wandb.finish()
+    except Exception:
+        pass
+
 
 def create_argparser():
     defaults = dict(
