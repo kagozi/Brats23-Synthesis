@@ -63,7 +63,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
             except (zlib.error, OSError, EOFError) as e:
                 print(f"[SKIP] Corrupted t1n file {filedict['t1n']}: {e}")
                 missing = 't1n'
-                t1n = torch.zeros(1)
+                t1n = torch.zeros(1, 224, 224, 160)
         else:
             missing = 't1n'
             t1n = torch.zeros(1)
@@ -78,7 +78,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
             except (zlib.error, OSError, EOFError) as e:
                 print(f"[SKIP] Corrupted t1c file {filedict['t1c']}: {e}")
                 missing = 't1c'
-                t1c = torch.zeros(1)
+                t1c = torch.zeros(1, 224, 224, 160)
         else:
             missing = 't1c'
             t1c = torch.zeros(1)
@@ -93,7 +93,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
             except (zlib.error, OSError, EOFError) as e:
                 print(f"[SKIP] Corrupted t2w file {filedict['t2w']}: {e}")
                 missing = 't2w'
-                t2w = torch.zeros(1)
+                t2w = torch.zeros(1, 224, 224, 160)
         else:
             missing = 't2w'
             t2w = torch.zeros(1)
@@ -108,7 +108,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
             except (zlib.error, OSError, EOFError) as e:
                 print(f"[SKIP] Corrupted t2f file {filedict['t2f']}: {e}")
                 missing = 't2f'
-                t2f = torch.zeros(1)
+                t2f = torch.zeros(1, 224, 224, 160)
         else:
             missing = 't2f'
             t2f = torch.zeros(1)
