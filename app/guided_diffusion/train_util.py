@@ -212,8 +212,12 @@ class TrainLoop:
                         cond = {}
                     except StopIteration:
                         self.iterdatal = iter(self.datal)
-                        batch = next(self.iterdatal)
-                        cond = {}
+                        try:
+                            batch = next(self.iterdatal)
+                            cond = {}
+                        except Exception as e:
+                            print(f"[DataLoader] Skipping corrupted sample after epoch reset: {e}", flush=True)
+                            batch = None
                     except Exception as e:
                         print(f"[DataLoader] Skipping corrupted sample: {e}", flush=True)
                         batch = None
