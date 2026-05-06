@@ -597,16 +597,22 @@ class TrainLoop:
 
 def parse_resume_step_from_filename(filename):
     """
-    Parse filenames of the form path/to/modelNNNNNN.pt, where NNNNNN is the
-    checkpoint's number of steps.
+    Parse filenames of the form brats_{modality}_{step}_{schedule}_{diffusion_steps}.pt
+    and return the step number (field index 2 in the underscore-split basename).
     """
 
     split = os.path.basename(filename)
-    split = split.split(".")[-2]  # remove extension
-    split = split.split("_")[-1]  # remove possible underscores, keep only last word
-    # extract trailing number
+    split = split.split(".")[-2]  # remove extension -> "brats_t1n_508500_sampled_100"
+    parts = split.split("_")
+    # Field index 2 is the step number: brats(0) _ modality(1) _ step(2) _ schedule(3) _ diffusion(4)
+    if len(parts) >= 3:
+        try:
+            return int(parts[2])
+        except ValueError:
+            pass
+    # Fallback: extract trailing number from last field
     reversed_split = []
-    for c in reversed(split):
+    for c in reversed(parts[-1]):
         if not c.isdigit():
             break
         reversed_split.append(c)
@@ -627,30 +633,8 @@ def get_blob_logdir():
 
 
 def find_resume_checkpoint():
-    """
-    Scan CHECKPOINT_DIR for the latest model checkpoint and return its path,
-    or None if no checkpoint exists yet.
-
-    Checkpoint filenames written by save_checkpoint follow the pattern:
-        model{step:06d}.pt   (periodic saves)
-        model_best_{modality}.pt  (best-SSIM saves)
-
-    We prefer the highest-step periodic checkpoint so resume_step stays accurate.
-    """
-    checkpoint_dir = os.path.join(get_blob_logdir(), 'checkpoints')
-    pattern = os.path.join(checkpoint_dir, "model[0-9]*.pt")
-    candidates = glob.glob(pattern)
-    if not candidates:
-        return None
-    # Pick the one with the largest step number embedded in the filename.
-    def _step(path):
-        try:
-            return int(os.path.basename(path).replace("model", "").replace(".pt", ""))
-        except ValueError:
-            return -1
-    latest = max(candidates, key=_step)
-    print(f"[Resume] Found checkpoint: {latest}", flush=True)
-    return latest
+    # Resume is handled by run.sh which passes --resume_checkpoint per modality.
+    return None
 
 
 def log_loss_dict(diffusion, ts, losses):
