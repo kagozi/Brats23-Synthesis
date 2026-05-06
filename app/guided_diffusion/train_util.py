@@ -166,7 +166,7 @@ class TrainLoop:
 
         if resume_checkpoint:
             print('resume model ...')
-            #self.resume_step = parse_resume_step_from_filename(resume_checkpoint)
+            self.resume_step = parse_resume_step_from_filename(resume_checkpoint)
             if dist.get_rank() == 0:
                 logger.log(f"loading model from checkpoint: {resume_checkpoint}...")
                 self.model.load_state_dict(
@@ -627,9 +627,30 @@ def get_blob_logdir():
 
 
 def find_resume_checkpoint():
-    # On your infrastructure, you may want to override this to automatically
-    # discover the latest checkpoint on your blob storage, etc.
-    return None
+    """
+    Scan CHECKPOINT_DIR for the latest model checkpoint and return its path,
+    or None if no checkpoint exists yet.
+
+    Checkpoint filenames written by save_checkpoint follow the pattern:
+        model{step:06d}.pt   (periodic saves)
+        model_best_{modality}.pt  (best-SSIM saves)
+
+    We prefer the highest-step periodic checkpoint so resume_step stays accurate.
+    """
+    checkpoint_dir = os.path.join(get_blob_logdir(), 'checkpoints')
+    pattern = os.path.join(checkpoint_dir, "model[0-9]*.pt")
+    candidates = glob.glob(pattern)
+    if not candidates:
+        return None
+    # Pick the one with the largest step number embedded in the filename.
+    def _step(path):
+        try:
+            return int(os.path.basename(path).replace("model", "").replace(".pt", ""))
+        except ValueError:
+            return -1
+    latest = max(candidates, key=_step)
+    print(f"[Resume] Found checkpoint: {latest}", flush=True)
+    return latest
 
 
 def log_loss_dict(diffusion, ts, losses):
