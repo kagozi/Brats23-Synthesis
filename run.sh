@@ -51,7 +51,7 @@ train_modality() {
         echo "    Resuming from: $RESUME_CKPT"
     else
         # Auto-detect latest checkpoint for this modality
-        local latest=$(ls -t "$CKPT_DIR"/brats_${mod}_*.pt 2>/dev/null | head -1)
+        local latest=$(ls -t "$CKPT_DIR"/checkpoints/brats_${mod}_*.pt 2>/dev/null | head -1)
         if [ -n "$latest" ]; then
             RESUME_ARG="--resume_checkpoint $latest"
             echo "    Auto-resuming from: $latest"
