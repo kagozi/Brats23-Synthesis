@@ -56,23 +56,29 @@ def convert_case(case_dir: str, images_out: str, labels_out: str) -> bool:
     """
     Convert one BraTS 2023 case to nnUNet format.
     Returns True on success.
+
+    Atomic: all source files are verified to exist before any copying begins,
+    so imagesTr/ and labelsTr/ always contain the same set of cases.
     """
     case_name = os.path.basename(case_dir)
 
-    # --- modalities ---
+    # --- verify all files exist before touching the output dirs ---
+    seg_src = os.path.join(case_dir, f"{case_name}-seg.nii.gz")
+    if not os.path.exists(seg_src):
+        print(f"  [SKIP] {case_name}: missing seg")
+        return False
+
+    mod_srcs = {}
     for mod, suffix in MODALITY_SUFFIXES.items():
         src = os.path.join(case_dir, f"{case_name}-{mod}.nii.gz")
         if not os.path.exists(src):
             print(f"  [SKIP] {case_name}: missing {mod}")
             return False
-        dst = os.path.join(images_out, f"{case_name}{suffix}.nii.gz")
-        shutil.copy2(src, dst)
+        mod_srcs[suffix] = src
 
-    # --- segmentation ---
-    seg_src = os.path.join(case_dir, f"{case_name}-seg.nii.gz")
-    if not os.path.exists(seg_src):
-        print(f"  [SKIP] {case_name}: missing seg")
-        return False
+    # --- all files present: copy atomically ---
+    for suffix, src in mod_srcs.items():
+        shutil.copy2(src, os.path.join(images_out, f"{case_name}{suffix}.nii.gz"))
 
     verify_labels(seg_src)
     # BraTS 2023 labels are already 0/1/2/3 — copy directly, no remapping

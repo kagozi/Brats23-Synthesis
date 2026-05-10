@@ -75,20 +75,33 @@ spec:
               mkdir -p "$nnUNet_raw" "$nnUNet_preprocessed" "$nnUNet_results"
 
               # ── Step 1: Convert to nnUNet format ──────────────────────────────
-              # Always regenerate dataset.json (cheap) so format changes take
-              # effect even when imagesTr/ already exists from a previous run.
+              # Always re-run prepare script so dataset.json is consistent with
+              # whatever is actually in imagesTr/ + labelsTr/.
+              # Also purge any orphaned imagesTr files that have no matching
+              # labelsTr entry (e.g. BraTS-MET-00404-000 which has no seg mask).
               DATASET_DIR="$nnUNet_raw/Dataset${DATASET_ID}_BraTS2023_GLI"
-              IMAGES_DONE="$DATASET_DIR/imagesTr"
-              if [ -d "$IMAGES_DONE" ] && [ "$(ls -A $IMAGES_DONE)" ]; then
-                echo ">>> imagesTr already populated — regenerating dataset.json only..."
-                python scripts/prepare_nnunet_dataset.py \
-                  --input_dir  "$TRAIN_DIR" \
-                  --nnunet_raw "$nnUNet_raw"
-              else
-                echo ">>> Converting training data to nnUNet format..."
-                python scripts/prepare_nnunet_dataset.py \
-                  --input_dir  "$TRAIN_DIR" \
-                  --nnunet_raw "$nnUNet_raw"
+              IMAGES_TR="$DATASET_DIR/imagesTr"
+              LABELS_TR="$DATASET_DIR/labelsTr"
+
+              echo ">>> Converting training data to nnUNet format..."
+              python scripts/prepare_nnunet_dataset.py \
+                --input_dir  "$TRAIN_DIR" \
+                --nnunet_raw "$nnUNet_raw"
+
+              # Remove orphaned imagesTr files: any case present in imagesTr/
+              # but missing from labelsTr/ would cause verify_dataset_integrity
+              # to fail with a case-count mismatch.
+              if [ -d "$IMAGES_TR" ] && [ -d "$LABELS_TR" ]; then
+                echo ">>> Checking for orphaned imagesTr files..."
+                for img in "$IMAGES_TR"/*_0000.nii.gz; do
+                  [ -f "$img" ] || continue
+                  base=$(basename "$img" _0000.nii.gz)
+                  if [ ! -f "$LABELS_TR/${base}.nii.gz" ]; then
+                    echo "  [PURGE] orphan: $base (no matching label)"
+                    rm -f "$IMAGES_TR/${base}_"*.nii.gz
+                  fi
+                done
+                echo ">>> Orphan check complete."
               fi
 
               # ── Step 2: Plan & preprocess ─────────────────────────────────────
