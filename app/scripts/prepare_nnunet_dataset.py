@@ -82,6 +82,16 @@ def convert_case(case_dir: str, images_out: str, labels_out: str) -> bool:
 
 
 def generate_dataset_json(output_dir: str, num_training: int) -> None:
+    # nnUNet v2 region-based training format.
+    # "labels" must map region names to lists of raw label values.
+    # "regions_class_order" controls the output channel order for the
+    # sigmoid heads and must match the order of regions in "labels".
+    #
+    # BraTS 2023 GLI raw labels: 0=bg, 1=NCR, 2=SNFH/edema, 3=ET
+    # Regions:
+    #   whole tumor (WT) = 1+2+3
+    #   tumor core  (TC) = 1+3
+    #   enhancing   (ET) = 3
     dataset_json = {
         "channel_names": {
             "0": "T1n",
@@ -90,12 +100,11 @@ def generate_dataset_json(output_dir: str, num_training: int) -> None:
             "3": "T2f",
         },
         "labels": {
-            "background": 0,
-            "NCR":  1,
-            "SNFH": 2,
-            "ET":   3,
+            "background":      0,
+            "whole tumor":     [1, 2, 3],
+            "tumor core":      [1, 3],
+            "enhancing tumor": [3],
         },
-        # Hierarchical regions for nnUNet region-based training
         "regions_class_order": [1, 2, 3],
         "numTraining": num_training,
         "file_ending": ".nii.gz",

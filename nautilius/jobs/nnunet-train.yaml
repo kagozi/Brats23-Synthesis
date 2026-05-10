@@ -74,21 +74,31 @@ spec:
               echo "nnUNet_res  : $nnUNet_results"
               mkdir -p "$nnUNet_raw" "$nnUNet_preprocessed" "$nnUNet_results"
 
-              # ── Step 1: Convert to nnUNet format (idempotent) ─────────────────
+              # ── Step 1: Convert to nnUNet format ──────────────────────────────
+              # Always regenerate dataset.json (cheap) so format changes take
+              # effect even when imagesTr/ already exists from a previous run.
               DATASET_DIR="$nnUNet_raw/Dataset${DATASET_ID}_BraTS2023_GLI"
-              if [ ! -f "$DATASET_DIR/dataset.json" ]; then
-                echo ">>> Converting training data to nnUNet format..."
+              IMAGES_DONE="$DATASET_DIR/imagesTr"
+              if [ -d "$IMAGES_DONE" ] && [ "$(ls -A $IMAGES_DONE)" ]; then
+                echo ">>> imagesTr already populated — regenerating dataset.json only..."
                 python scripts/prepare_nnunet_dataset.py \
                   --input_dir  "$TRAIN_DIR" \
                   --nnunet_raw "$nnUNet_raw"
               else
-                echo ">>> Dataset already converted — skipping."
+                echo ">>> Converting training data to nnUNet format..."
+                python scripts/prepare_nnunet_dataset.py \
+                  --input_dir  "$TRAIN_DIR" \
+                  --nnunet_raw "$nnUNet_raw"
               fi
 
-              # ── Step 2: Plan & preprocess (idempotent) ────────────────────────
+              # ── Step 2: Plan & preprocess ─────────────────────────────────────
+              # Re-run if plans.json is missing (handles first run and
+              # the case where preprocessing was built against a bad dataset.json).
               PREP_DIR="$nnUNet_preprocessed/Dataset${DATASET_ID}_BraTS2023_GLI"
-              if [ ! -d "$PREP_DIR" ]; then
+              PLANS_FILE="$PREP_DIR/nnUNetPlans.json"
+              if [ ! -f "$PLANS_FILE" ]; then
                 echo ">>> Planning and preprocessing..."
+                rm -rf "$PREP_DIR"   # remove any partial state from a prior failed run
                 nnUNetv2_plan_and_preprocess \
                   -d "$DATASET_ID" \
                   --verify_dataset_integrity \
