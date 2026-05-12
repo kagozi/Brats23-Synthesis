@@ -1,0 +1,119 @@
+# nautilius/jobs/debug-nnunet.yaml
+#
+# Targeted debug pod — inspects PVC state and actually runs
+# nnUNetv2_plan_and_preprocess to surface the real error.
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/debug-nnunet.yaml
+#   kubectl logs -f pod/debug-nnunet -n gai-lina-group
+#
+# Delete:
+#   kubectl delete pod debug-nnunet -n gai-lina-group
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-nnunet
+  namespace: gai-lina-group
+spec:
+  restartPolicy: Never
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: PreferNoSchedule
+  containers:
+    - name: debugger
+      image: ghcr.io/kagozi/brats23-cwdm:latest
+      imagePullPolicy: Always
+      env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: nnUNet_raw
+          value: "/pvc/nnunet/raw"
+        - name: nnUNet_preprocessed
+          value: "/pvc/nnunet/preprocessed"
+        - name: nnUNet_results
+          value: "/pvc/nnunet/results"
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          echo "========================================"
+          echo " Phase 1: Inspect PVC state"
+          echo "========================================"
+
+          echo ""
+          echo "--- Current dataset.json on PVC ---"
+          cat /pvc/nnunet/raw/Dataset001_BraTS2023_GLI/dataset.json 2>&1 || echo "[not found]"
+
+          echo ""
+          echo "--- imagesTr file count ---"
+          ls /pvc/nnunet/raw/Dataset001_BraTS2023_GLI/imagesTr/ 2>/dev/null | wc -l || echo "0"
+
+          echo ""
+          echo "--- labelsTr file count ---"
+          ls /pvc/nnunet/raw/Dataset001_BraTS2023_GLI/labelsTr/ 2>/dev/null | wc -l || echo "0"
+
+          echo ""
+          echo "--- nnUNet preprocessed dir ---"
+          ls /pvc/nnunet/preprocessed/ 2>&1 || echo "[empty or missing]"
+
+          echo ""
+          echo "--- nnUNet results dir ---"
+          ls /pvc/nnunet/results/ 2>&1 || echo "[empty or missing]"
+
+          echo ""
+          echo "========================================"
+          echo " Phase 2: Regenerate dataset.json"
+          echo "========================================"
+          python scripts/prepare_nnunet_dataset.py \
+            --input_dir  /pvc/data/brats23/train \
+            --nnunet_raw /pvc/nnunet/raw
+          echo "Exit code: $?"
+
+          echo ""
+          echo "--- dataset.json AFTER regeneration ---"
+          cat /pvc/nnunet/raw/Dataset001_BraTS2023_GLI/dataset.json 2>&1
+
+          echo ""
+          echo "========================================"
+          echo " Phase 3: Run plan_and_preprocess"
+          echo "========================================"
+          echo "Removing any stale preprocessed dir..."
+          rm -rf /pvc/nnunet/preprocessed/Dataset001_BraTS2023_GLI
+
+          echo "Running nnUNetv2_plan_and_preprocess..."
+          nnUNetv2_plan_and_preprocess \
+            -d 001 \
+            --verify_dataset_integrity \
+            -c 3d_fullres 2>&1
+          PLAN_EXIT=$?
+          echo ""
+          echo "plan_and_preprocess exit code: $PLAN_EXIT"
+
+          if [ $PLAN_EXIT -eq 0 ]; then
+            echo ""
+            echo "--- Preprocessed dir after success ---"
+            ls /pvc/nnunet/preprocessed/Dataset001_BraTS2023_GLI/ 2>&1
+          fi
+
+          echo ""
+          echo "========================================"
+          echo " Debug complete"
+          echo "========================================"
+
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "4"
+          nvidia.com/gpu: "1"
+        limits:
+          memory: "24Gi"
+          cpu: "8"
+          nvidia.com/gpu: "1"
+      volumeMounts:
+        - name: brats23-vol
+          mountPath: /pvc
+  volumes:
+    - name: brats23-vol
+      persistentVolumeClaim:
+        claimName: brats23-pvc
