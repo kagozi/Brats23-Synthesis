@@ -537,6 +537,7 @@ class GaussianDiffusion:
         for sample in self.p_sample_loop_progressive(
             model,
             shape,
+            time=self.num_timesteps,
             noise=noise,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
