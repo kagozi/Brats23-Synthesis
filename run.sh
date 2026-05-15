@@ -81,7 +81,7 @@ train_modality() {
         --in_channels=32 \
         --out_channels=8 \
         --lr=1e-5 \
-        --lr_anneal_steps=200000 \
+        --lr_anneal_steps=${LR_ANNEAL_STEPS:-200000} \
         --data_dir="$TRAIN_DIR" \
         --image_size=224 \
         --use_fp16=True \

@@ -2,6 +2,7 @@ import copy
 import functools
 import os
 import glob
+import shutil
 
 import blobfile as bf
 import torch as th
@@ -118,6 +119,7 @@ class TrainLoop:
                 print(f"✅ SSIM metric available and ready to use")
             
             self._load_and_sync_parameters()
+
             if _HAS_BNB:
                 print("[Optimizer] Using 8-bit Adam (bitsandbytes) to reduce GPU memory.", flush=True)
                 self.opt = bnb.optim.Adam8bit(
@@ -338,6 +340,7 @@ class TrainLoop:
                 total_save_time += save_end - save_start
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
                     return
+
             self.step += 1
 
             # Print profiling info every log_interval
@@ -357,6 +360,17 @@ class TrainLoop:
         # Save the last checkpoint if it wasn't already saved.
         if (self.step - 1) % self.save_interval != 0:
             self.save_if_best(ssim_score)
+
+        # At end of phase: copy the best checkpoint to a fixed phase name so
+        # downstream eval jobs can locate it without knowing the exact step.
+        # Requires TRAINING_PHASE env var (1, 2, or 3).
+        phase = os.environ.get("TRAINING_PHASE", "")
+        if phase and dist.get_rank() == 0 and self.contr in self.best_checkpoints:
+            src = self.best_checkpoints[self.contr]
+            if os.path.exists(src):
+                dst = os.path.join(self.checkpoint_dir, f"brats_{self.contr}_phase{phase}_best.pt")
+                shutil.copy2(src, dst)
+                print(f"[PHASE] Copied phase-{phase} best checkpoint → {dst}")
 
     def save_if_best(self, current_ssim):
         """Only save checkpoint if current SSIM is better than previous best"""

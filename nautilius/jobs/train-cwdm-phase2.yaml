@@ -1,4 +1,4 @@
-# nautilius/jobs/train-cwdm.yaml
+# nautilius/jobs/train-cwdm-phase2.yaml
 #
 # Fast-CWDM — all 4 modalities trained in parallel.
 # One Job per modality, all launched with a single kubectl apply.
@@ -22,7 +22,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: train-cwdm-t1n
+  name: train-cwdm-p2-t1n
   namespace: gai-lina-group
 spec:
   backoffLimit: 5
@@ -53,11 +53,11 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "2"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "400000"
             - name: PYTHONUNBUFFERED
-              value: "1"
+              value: "2"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -100,7 +100,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: train-cwdm-t1c
+  name: train-cwdm-p2-t1c
   namespace: gai-lina-group
 spec:
   backoffLimit: 5
@@ -131,11 +131,11 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "2"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "400000"
             - name: PYTHONUNBUFFERED
-              value: "1"
+              value: "2"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -178,7 +178,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: train-cwdm-t2w
+  name: train-cwdm-p2-t2w
   namespace: gai-lina-group
 spec:
   backoffLimit: 5
@@ -209,11 +209,11 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "2"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "400000"
             - name: PYTHONUNBUFFERED
-              value: "1"
+              value: "2"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -256,7 +256,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: train-cwdm-t2f
+  name: train-cwdm-p2-t2f
   namespace: gai-lina-group
 spec:
   backoffLimit: 5
@@ -287,11 +287,11 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "2"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "400000"
             - name: PYTHONUNBUFFERED
-              value: "1"
+              value: "2"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:

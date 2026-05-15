@@ -58,20 +58,30 @@ spec:
               set -e
               VAL_DIR="/pvc/data/brats23/test"
               CKPT_DIR="/pvc/checkpoints/cwdm/checkpoints"
-              OUT_ROOT="/pvc/outputs/cwdm/test"
+              PHASE="${TRAINING_PHASE:-}"
+              OUT_ROOT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}test"
               mkdir -p "$OUT_ROOT"
 
               echo "=== Fast-CWDM Synthesis Evaluation (TEST SET) ==="
               echo "Test dir    : $VAL_DIR"
               echo "Ckpt dir    : $CKPT_DIR"
+              echo "Phase       : ${PHASE:-latest}"
               echo "Output root : $OUT_ROOT"
               echo ""
 
               for MOD in t1n t1c t2w t2f; do
-                CKPT=$(ls -t "$CKPT_DIR"/brats_${MOD}_*.pt 2>/dev/null | head -1)
-                if [ -z "$CKPT" ]; then
-                  echo "[SKIP] No checkpoint found for $MOD"
-                  continue
+                if [ -n "$PHASE" ]; then
+                  CKPT="$CKPT_DIR/brats_${MOD}_phase${PHASE}_best.pt"
+                  if [ ! -f "$CKPT" ]; then
+                    echo "[SKIP] Phase-${PHASE} checkpoint not found for $MOD: $CKPT"
+                    continue
+                  fi
+                else
+                  CKPT=$(ls -t "$CKPT_DIR"/brats_${MOD}_*.pt 2>/dev/null | head -1)
+                  if [ -z "$CKPT" ]; then
+                    echo "[SKIP] No checkpoint found for $MOD"
+                    continue
+                  fi
                 fi
                 # Each modality gets its own output dir so sample.nii.gz files
                 # from different modality runs do not overwrite each other.
@@ -106,7 +116,7 @@ spec:
                 echo ""
               done
 
-              echo "=== Metrics summary ==="
+              echo "=== Metrics summary (phase: ${PHASE:-latest}) ==="
               for MOD in t1n t1c t2w t2f; do
                 CSV="$OUT_ROOT/$MOD/metrics_${MOD}.csv"
                 if [ -f "$CSV" ]; then
