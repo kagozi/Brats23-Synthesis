@@ -59,19 +59,23 @@ spec:
                 secretKeyRef:
                   name: wandb-credentials
                   key: entity
+            - name: TRAINING_PHASE   # set to "1", "2", or "3" to select phase outputs
+              value: ""              # empty = use /pvc/outputs/cwdm/test/ (phase 1 default)
           command: ["/bin/bash", "-c"]
           args:
             - |
               set -e
               DATASET_ID="001"
-              SYNTHESIS_ROOT="/pvc/outputs/cwdm/test"
+              PHASE="${TRAINING_PHASE:-}"
+              SYNTHESIS_ROOT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}test"
               TEST_DATA_DIR="/pvc/data/brats23/test"
-              IMAGES_ROOT="/pvc/nnunet/imagesTs"
-              PRED_ROOT="/pvc/nnunet/predictions"
-              DICE_OUT="/pvc/outputs/cwdm/dice"
+              IMAGES_ROOT="/pvc/nnunet/imagesTs${PHASE:+_phase${PHASE}}"
+              PRED_ROOT="/pvc/nnunet/predictions${PHASE:+_phase${PHASE}}"
+              DICE_OUT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}dice"
               mkdir -p "$IMAGES_ROOT" "$PRED_ROOT" "$DICE_OUT"
 
               echo "=== nnUNet Segmentation Evaluation — BraTS 2023 CWDM ==="
+              echo "Phase         : ${PHASE:-1 (default)}"
               echo "Synthesis root: $SYNTHESIS_ROOT"
               echo "Test data dir : $TEST_DATA_DIR"
               echo "nnUNet results: $nnUNet_results"
