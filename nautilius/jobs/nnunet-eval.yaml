@@ -131,8 +131,19 @@ spec:
                   echo "--- $MOD ---"
                   head -1 "$CSV"
                   tail -n +2 "$CSV" | awk -F',' '
-                    NR>0 { wt+=$2; tc+=$3; et+=$4; n++ }
-                    END  { printf "  Mean  WT=%.4f  TC=%.4f  ET=%.4f  (n=%d)\n", wt/n, tc/n, et/n, n }
+                    NR>0 {
+                      n++
+                      if ($2 != "nan" && $2 != "") { wt+=$2; wt_n++ }
+                      if ($3 != "nan" && $3 != "") { tc+=$3; tc_n++ }
+                      if ($4 != "nan" && $4 != "") { et+=$4; et_n++ }
+                    }
+                    END {
+                      printf "  Mean  WT=%.4f (n=%d)  TC=%.4f (n=%d)  ET=%.4f (n=%d)  (total=%d)\n",
+                        (wt_n>0 ? wt/wt_n : 0), wt_n,
+                        (tc_n>0 ? tc/tc_n : 0), tc_n,
+                        (et_n>0 ? et/et_n : 0), et_n,
+                        n
+                    }
                   '
                 fi
               done
