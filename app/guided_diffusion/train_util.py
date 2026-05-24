@@ -184,6 +184,11 @@ class TrainLoop:
         opt_checkpoint = bf.join(
             bf.dirname(main_checkpoint), f"opt{self.resume_step:06}.pt"
         )
+        # save_if_best writes opt_best_{modality}.pt — try that as fallback
+        if not bf.exists(opt_checkpoint):
+            opt_checkpoint = bf.join(
+                bf.dirname(main_checkpoint), f"opt_best_{self.contr}.pt"
+            )
         if bf.exists(opt_checkpoint):
             logger.log(f"loading optimizer state from checkpoint: {opt_checkpoint}")
             state_dict = dist_util.load_state_dict(

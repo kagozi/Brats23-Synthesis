@@ -46,15 +46,22 @@ def binary_dice(pred_bin: np.ndarray, gt_bin: np.ndarray) -> float:
     return float(2 * intersection / denom)
 
 
-def region_dice(pred: np.ndarray, gt: np.ndarray) -> dict:
+def region_dice(pred: np.ndarray, gt: np.ndarray,
+                pred_ncr_label: int = 1, pred_et_label: int = 3) -> dict:
     """
-    Compute WT/TC/ET Dice for BraTS 2023 labels (1/2/3).
+    Compute WT/TC/ET Dice for BraTS 2023 GT labels (NCR=1, SNFH=2, ET=3).
 
-    pred, gt: integer arrays with values in {0,1,2,3}.
+    pred_ncr_label / pred_et_label let callers handle models whose internal
+    label numbering differs from BraTS 2023 GT.  The BraTS-2021 pretrained
+    nnUNet (Dataset137, fold 5) outputs NCR=2, ET=3, so pass pred_ncr_label=2.
+    Our self-trained model (Dataset001) uses NCR=1, ET=3 (the defaults).
     """
-    wt_dice = binary_dice(pred > 0,              gt > 0)
-    tc_dice = binary_dice(np.isin(pred, [1, 3]), np.isin(gt, [1, 3]))
-    et_dice = binary_dice(pred == 3,             gt == 3)
+    wt_dice = binary_dice(pred > 0,
+                          gt > 0)
+    tc_dice = binary_dice(np.isin(pred, [pred_ncr_label, pred_et_label]),
+                          np.isin(gt,   [1, 3]))
+    et_dice = binary_dice(pred == pred_et_label,
+                          gt   == 3)
     return {"WT": wt_dice, "TC": tc_dice, "ET": et_dice}
 
 
@@ -62,7 +69,8 @@ def region_dice(pred: np.ndarray, gt: np.ndarray) -> dict:
 # Main evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def evaluate(pred_dir: str, gt_dir: str, synth_mod: str) -> list[dict]:
+def evaluate(pred_dir: str, gt_dir: str, synth_mod: str,
+             pred_ncr_label: int = 1, pred_et_label: int = 3) -> list[dict]:
     """
     Compare nnUNet predictions in pred_dir against BraTS ground-truth seg masks.
     Returns list of per-subject result dicts.
@@ -91,7 +99,9 @@ def evaluate(pred_dir: str, gt_dir: str, synth_mod: str) -> list[dict]:
             if pred_np.shape != gt_np.shape:
                 print(f"  [WARN] {case}: shape mismatch pred={pred_np.shape} gt={gt_np.shape}")
 
-            scores = region_dice(pred_np, gt_np)
+            scores = region_dice(pred_np, gt_np,
+                                 pred_ncr_label=pred_ncr_label,
+                                 pred_et_label=pred_et_label)
             row = {"subject": case, **scores}
             results.append(row)
 
@@ -137,6 +147,10 @@ def main():
                         help="Which modality was synthesized (for logging)")
     parser.add_argument("--output_dir", default="/pvc/outputs/cwdm/dice",
                         help="Where to write the per-subject CSV")
+    parser.add_argument("--pred_ncr_label", type=int, default=1,
+                        help="Pred label for NCR (1 for self-trained, 2 for BraTS2021 pretrained)")
+    parser.add_argument("--pred_et_label", type=int, default=3,
+                        help="Pred label for ET (3 for both models)")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -153,7 +167,9 @@ def main():
     )
 
     # ── Evaluate ──────────────────────────────────────────────────────────────
-    results = evaluate(args.pred_dir, args.gt_dir, mod)
+    results = evaluate(args.pred_dir, args.gt_dir, mod,
+                       pred_ncr_label=args.pred_ncr_label,
+                       pred_et_label=args.pred_et_label)
 
     if not results:
         print("No results — check pred_dir and gt_dir paths.")

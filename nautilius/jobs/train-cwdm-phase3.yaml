@@ -1,20 +1,20 @@
 # nautilius/jobs/train-cwdm-phase3.yaml
 #
-# Fast-CWDM — all 4 modalities trained in parallel.
-# One Job per modality, all launched with a single kubectl apply.
-# Uses kind: Job (controller) to bypass the 32 GB bare-Pod limit.
+# Fast-CWDM — all 4 modalities trained in parallel (phase 3: 400k→600k steps).
+# Resumes from phase 2 best checkpoint via auto-resume in run.sh.
+# Saves brats_{mod}_phase3_best.pt at end of training.
 #
 # Deploy:
-#   kubectl apply -f nautilius/jobs/train-cwdm.yaml
+#   kubectl apply -f nautilius/jobs/train-cwdm-phase3.yaml
 #
 # Monitor:
-#   kubectl logs -f job/train-cwdm-t1n -n gai-lina-group
-#   kubectl logs -f job/train-cwdm-t1c -n gai-lina-group
-#   kubectl logs -f job/train-cwdm-t2w -n gai-lina-group
-#   kubectl logs -f job/train-cwdm-t2f -n gai-lina-group
+#   kubectl logs -f job/train-cwdm-p3-t1n -n gai-lina-group
+#   kubectl logs -f job/train-cwdm-p3-t1c -n gai-lina-group
+#   kubectl logs -f job/train-cwdm-p3-t2w -n gai-lina-group
+#   kubectl logs -f job/train-cwdm-p3-t2f -n gai-lina-group
 #
 # Delete:
-#   kubectl delete -f nautilius/jobs/train-cwdm.yaml
+#   kubectl delete -f nautilius/jobs/train-cwdm-phase3.yaml
 
 # =============================================================================
 # t1n
@@ -29,6 +29,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
@@ -57,7 +59,7 @@ spec:
             - name: LR_ANNEAL_STEPS
               value: "600000"
             - name: PYTHONUNBUFFERED
-              value: "3"
+              value: "1"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -107,6 +109,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
@@ -135,7 +139,7 @@ spec:
             - name: LR_ANNEAL_STEPS
               value: "600000"
             - name: PYTHONUNBUFFERED
-              value: "3"
+              value: "1"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -185,6 +189,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
@@ -213,7 +219,7 @@ spec:
             - name: LR_ANNEAL_STEPS
               value: "600000"
             - name: PYTHONUNBUFFERED
-              value: "3"
+              value: "1"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -263,6 +269,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
@@ -291,7 +299,7 @@ spec:
             - name: LR_ANNEAL_STEPS
               value: "600000"
             - name: PYTHONUNBUFFERED
-              value: "3"
+              value: "1"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
