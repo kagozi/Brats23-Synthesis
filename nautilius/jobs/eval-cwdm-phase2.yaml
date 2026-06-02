@@ -1,0 +1,150 @@
+# nautilius/jobs/eval-cwdm-phase2.yaml
+#
+# Fast-CWDM — synthesis evaluation using the phase-2 best checkpoint (400k steps).
+# Outputs go to /pvc/outputs/cwdm/phase2/test/{mod}/.
+#
+# Run nnunet-eval-phase2.yaml after this completes.
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/eval-cwdm-phase2.yaml
+#   kubectl logs -f job/eval-cwdm-p2 -n gai-lina-group
+#
+# Delete:
+#   kubectl delete -f nautilius/jobs/eval-cwdm-phase2.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eval-cwdm-p2
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: evaluator
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: TRAINING_PHASE
+              value: "2"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              VAL_DIR="/pvc/data/brats23/test"
+              CKPT_DIR="/pvc/checkpoints/cwdm/checkpoints"
+              PHASE="${TRAINING_PHASE:-}"
+              OUT_ROOT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}test"
+              mkdir -p "$OUT_ROOT"
+
+              echo "=== Fast-CWDM Synthesis Evaluation (TEST SET) ==="
+              echo "Test dir    : $VAL_DIR"
+              echo "Ckpt dir    : $CKPT_DIR"
+              echo "Phase       : ${PHASE:-latest}"
+              echo "Output root : $OUT_ROOT"
+              echo ""
+
+              for MOD in t1n t1c t2w t2f; do
+                if [ -n "$PHASE" ]; then
+                  CKPT="$CKPT_DIR/brats_${MOD}_phase${PHASE}_best.pt"
+                  if [ ! -f "$CKPT" ]; then
+                    echo "[SKIP] Phase-${PHASE} checkpoint not found for $MOD: $CKPT"
+                    continue
+                  fi
+                else
+                  CKPT=$(ls -t "$CKPT_DIR"/brats_${MOD}_*.pt 2>/dev/null | head -1)
+                  if [ -z "$CKPT" ]; then
+                    echo "[SKIP] No checkpoint found for $MOD"
+                    continue
+                  fi
+                fi
+                OUT_DIR="$OUT_ROOT/$MOD"
+                mkdir -p "$OUT_DIR"
+                echo ">>> Synthesizing $MOD  (checkpoint: $CKPT)"
+                PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
+                python scripts/sample.py \
+                  --dataset=brats \
+                  --data_dir="$VAL_DIR" \
+                  --model_path="$CKPT" \
+                  --output_dir="$OUT_DIR" \
+                  --contr="$MOD" \
+                  --num_channels=64 \
+                  --in_channels=32 \
+                  --out_channels=8 \
+                  --image_size=224 \
+                  --num_res_blocks=2 \
+                  --num_heads=1 \
+                  --num_groups=32 \
+                  --channel_mult=1,2,2,4,4 \
+                  --dims=3 \
+                  --learn_sigma=False \
+                  --use_scale_shift_norm=False \
+                  --attention_resolutions= \
+                  --diffusion_steps=100 \
+                  --noise_schedule=linear \
+                  --sample_schedule=sampled \
+                  --use_fp16=True \
+                  --batch_size=1
+                echo ">>> Done $MOD"
+                echo ""
+              done
+
+              echo "=== Metrics summary (phase: ${PHASE:-latest}) ==="
+              for MOD in t1n t1c t2w t2f; do
+                CSV="$OUT_ROOT/$MOD/metrics_${MOD}.csv"
+                if [ -f "$CSV" ]; then
+                  echo "--- $MOD ---"
+                  cat "$CSV"
+                fi
+              done
+
+              echo ""
+              echo "=== Evaluation complete. Test results at $OUT_ROOT ==="
+              ls -lah "$OUT_ROOT"/
+
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "19Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi

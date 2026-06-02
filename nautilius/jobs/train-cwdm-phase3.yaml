@@ -72,13 +72,13 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "16Gi"
-              cpu: "6"
+              memory: "8Gi"
+              cpu: "4"
               nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "19Gi"
-              cpu: "7"
+              memory: "9Gi"
+              cpu: "4"
               nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:

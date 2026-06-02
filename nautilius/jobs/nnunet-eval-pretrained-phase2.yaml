@@ -1,36 +1,23 @@
-# nautilius/jobs/nnunet-eval-pretrained.yaml
+# nautilius/jobs/nnunet-eval-pretrained-phase2.yaml
 #
-# Segmentation evaluation using the BraTS-2021 pretrained nnUNet from
-# https://github.com/tsereda/brats-synthesis (Dataset137, fold 5).
-#
-# This matches the model used in the Fast-cWDM paper (Table 2) and gives
-# directly comparable WT/TC/ET Dice scores.
-#
-# What this job does:
-#   1. Download Dataset137_BraTS2021 weights (checkpoint, plans, dataset)
-#      from Google Drive via gdown (~700 MB, one-time).
-#   2. Run nnUNetv2_predict -d 137 -f 5 on the already-prepared imagesTs
-#      directories (3 real + 1 synthesized per case).
-#   3. Compute WT/TC/ET Dice with the correct label mapping:
-#        BraTS-2021 model outputs: NCR=2, ET=3  (not NCR=1 like BraTS 2023 GT)
-#   4. Save CSVs to /pvc/outputs/cwdm/dice_pretrained/ and log to WandB.
+# Segmentation evaluation of phase-2 CWDM synthesis using the BraTS-2021
+# pretrained nnUNet (Dataset137, fold 5) — matches Fast-cWDM paper Table 2.
 #
 # Prerequisites:
-#   - nnunet-eval.yaml ran at least once so imagesTs_* dirs are populated.
-#     (or run eval-cwdm.yaml first to synthesize outputs, then reformat step
-#      here will re-prepare them if SKIP_REFORMAT is unset)
+#   - eval-cwdm-phase2.yaml complete (synthesized outputs present)
+#   - Dataset137 weights downloaded (or will be downloaded on first run)
 #
 # Deploy:
-#   kubectl apply -f nautilius/jobs/nnunet-eval-pretrained.yaml
-#   kubectl logs -f job/nnunet-eval-pretrained -n gai-lina-group
+#   kubectl apply -f nautilius/jobs/nnunet-eval-pretrained-phase2.yaml
+#   kubectl logs -f job/nnunet-eval-pretrained-p2 -n gai-lina-group
 #
 # Delete:
-#   kubectl delete -f nautilius/jobs/nnunet-eval-pretrained.yaml
+#   kubectl delete -f nautilius/jobs/nnunet-eval-pretrained-phase2.yaml
 
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: nnunet-eval-pretrained
+  name: nnunet-eval-pretrained-p2
   namespace: gai-lina-group
 spec:
   backoffLimit: 2
@@ -58,8 +45,8 @@ spec:
               value: "brats2023-cwdm"
             - name: WANDB_MODE
               value: "online"
-            - name: TRAINING_PHASE   # "2" or "3" — selects which synthesis outputs to use
-              value: ""              # empty = /pvc/outputs/cwdm/test/ (phase-2 best ckpt)
+            - name: TRAINING_PHASE
+              value: "2"
             - name: WANDB_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -101,19 +88,15 @@ spec:
                 pip install -q gdown
                 mkdir -p "$FOLD_DIR"
 
-                # checkpoint — ~700 MB
                 gdown "1n9dqT114udr9Qq8iYEKsJK347iHg9N88" \
                   -O "$FOLD_DIR/checkpoint_final.pth"
 
-                # dataset.json — nnUNetv2 needs it both at the dataset root
-                # AND inside the trainer folder
                 mkdir -p "$nnUNet_results/Dataset${DATASET_ID}_BraTS2021"
                 gdown "1A_suxQwElucF3w1HEYg3wMo6dG9OxBHo" \
                   -O "$nnUNet_results/Dataset${DATASET_ID}_BraTS2021/dataset.json"
                 cp "$nnUNet_results/Dataset${DATASET_ID}_BraTS2021/dataset.json" \
                    "$MODEL_DIR/dataset.json"
 
-                # plans.json
                 gdown "1U2b0BTNi8zrJACReoi_W08Fe-wM394wI" \
                   -O "$MODEL_DIR/plans.json"
 
@@ -122,7 +105,6 @@ spec:
                 echo ">>> Dataset137 weights already present — skipping download."
               fi
 
-              # Always ensure dataset.json is in the trainer folder (idempotent)
               cp "$nnUNet_results/Dataset${DATASET_ID}_BraTS2021/dataset.json" \
                  "$MODEL_DIR/dataset.json"
 
@@ -136,7 +118,6 @@ spec:
                 echo "  Modality: $MOD"
                 echo "============================================================"
 
-                # Reformat synthesis outputs if imagesTs not already populated
                 N_EXISTING=$(ls "$IMAGES_TS"/*_0000.nii.gz 2>/dev/null | wc -l)
                 if [ "$N_EXISTING" -eq 0 ]; then
                   echo ">>> imagesTs empty — reformatting synthesis outputs..."
@@ -149,7 +130,6 @@ spec:
                   echo ">>> imagesTs already has $N_EXISTING cases — skipping reformat."
                 fi
 
-                # nnUNet inference with pretrained BraTS-2021 model
                 echo ">>> Running nnUNetv2_predict (Dataset137, fold 5)..."
                 nnUNetv2_predict \
                   -i  "$IMAGES_TS" \
@@ -158,7 +138,6 @@ spec:
                   -c  3d_fullres \
                   -f  5
 
-                # Dice evaluation — BraTS-2021 model outputs NCR=2, ET=3
                 echo ">>> Computing WT/TC/ET Dice (pred_ncr_label=2, pred_et_label=3)..."
                 python scripts/evaluate_synthesis.py \
                   --pred_dir              "$PRED_DIR" \

@@ -376,6 +376,13 @@ class TrainLoop:
                 dst = os.path.join(self.checkpoint_dir, f"brats_{self.contr}_phase{phase}_best.pt")
                 shutil.copy2(src, dst)
                 print(f"[PHASE] Copied phase-{phase} best checkpoint → {dst}")
+                # Write step sidecar so the next phase can parse resume_step from the
+                # phase-best filename (which doesn't embed the step number directly).
+                src_step = parse_resume_step_from_filename(src)
+                step_file = dst.replace(".pt", ".step")
+                with open(step_file, "w") as _sf:
+                    _sf.write(str(src_step))
+                print(f"[PHASE] Wrote step sidecar {step_file} (step={src_step})")
 
     def save_if_best(self, current_ssim):
         """Only save checkpoint if current SSIM is better than previous best"""
@@ -618,7 +625,19 @@ def parse_resume_step_from_filename(filename):
     """
     Parse filenames of the form brats_{modality}_{step}_{schedule}_{diffusion_steps}.pt
     and return the step number (field index 2 in the underscore-split basename).
+
+    For phase-best filenames (brats_{mod}_phase{N}_best.pt) the step is not
+    embedded in the name; instead a sidecar file brats_{mod}_phase{N}_best.step
+    is written at the end of each phase.  Read that when present.
     """
+    # Phase-best sidecar check (e.g. brats_t1n_phase2_best.pt → .step file)
+    step_sidecar = os.path.splitext(filename)[0] + ".step"
+    if os.path.exists(step_sidecar):
+        try:
+            with open(step_sidecar) as _sf:
+                return int(_sf.read().strip())
+        except (ValueError, OSError):
+            pass
 
     split = os.path.basename(filename)
     split = split.split(".")[-2]  # remove extension -> "brats_t1n_508500_sampled_100"

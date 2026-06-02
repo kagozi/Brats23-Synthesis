@@ -1,0 +1,166 @@
+# nautilius/jobs/nnunet-eval-phase2.yaml
+#
+# Segmentation-based evaluation of phase-2 CWDM synthesis quality.
+# Reads synthesized outputs from /pvc/outputs/cwdm/phase2/test/.
+#
+# Prerequisites:
+#   - eval-cwdm-phase2.yaml complete (synthesized outputs present)
+#   - nnunet-train.yaml complete (BraTS 2023 weights at Dataset001_BraTS2023_GLI/)
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/nnunet-eval-phase2.yaml
+#   kubectl logs -f job/nnunet-eval-p2 -n gai-lina-group
+#
+# Delete:
+#   kubectl delete -f nautilius/jobs/nnunet-eval-phase2.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nnunet-eval-p2
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: evaluator
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: nnUNet_raw
+              value: "/pvc/nnunet/raw"
+            - name: nnUNet_preprocessed
+              value: "/pvc/nnunet/preprocessed"
+            - name: nnUNet_results
+              value: "/pvc/nnunet/results"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: TRAINING_PHASE
+              value: "2"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              DATASET_ID="001"
+              PHASE="${TRAINING_PHASE:-}"
+              SYNTHESIS_ROOT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}test"
+              TEST_DATA_DIR="/pvc/data/brats23/test"
+              IMAGES_ROOT="/pvc/nnunet/imagesTs${PHASE:+_phase${PHASE}}"
+              PRED_ROOT="/pvc/nnunet/predictions${PHASE:+_phase${PHASE}}"
+              DICE_OUT="/pvc/outputs/cwdm/${PHASE:+phase${PHASE}/}dice"
+              mkdir -p "$IMAGES_ROOT" "$PRED_ROOT" "$DICE_OUT"
+
+              echo "=== nnUNet Segmentation Evaluation — BraTS 2023 CWDM ==="
+              echo "Phase         : ${PHASE:-1 (default)}"
+              echo "Synthesis root: $SYNTHESIS_ROOT"
+              echo "Test data dir : $TEST_DATA_DIR"
+              echo "nnUNet results: $nnUNet_results"
+              echo ""
+
+              for MOD in t1n t1c t2w t2f; do
+                IMAGES_TS="$IMAGES_ROOT/imagesTs_${MOD}"
+                PRED_DIR="$PRED_ROOT/${MOD}"
+                mkdir -p "$PRED_DIR"
+
+                echo "============================================================"
+                echo "  Modality: $MOD"
+                echo "============================================================"
+
+                echo ">>> Reformatting ${MOD} synthesis outputs..."
+                python scripts/reformat_for_nnunet.py \
+                  --synthesis_dir "$SYNTHESIS_ROOT/$MOD" \
+                  --test_data_dir "$TEST_DATA_DIR" \
+                  --output_root   "$IMAGES_ROOT" \
+                  --modalities    "$MOD"
+
+                N_CASES=$(ls "$IMAGES_TS"/*_0000.nii.gz 2>/dev/null | wc -l)
+                echo "    Reformatted $N_CASES cases"
+
+                echo ">>> Running nnUNet inference for synthesized ${MOD}..."
+                nnUNetv2_predict \
+                  -i  "$IMAGES_TS" \
+                  -o  "$PRED_DIR" \
+                  -d  "$DATASET_ID" \
+                  -c  3d_fullres \
+                  -f  0 1 2 3 4
+
+                echo ">>> Computing WT/TC/ET Dice for synthesized ${MOD}..."
+                python scripts/evaluate_synthesis.py \
+                  --pred_dir              "$PRED_DIR" \
+                  --gt_dir                "$TEST_DATA_DIR" \
+                  --synthesized_modality  "$MOD" \
+                  --output_dir            "$DICE_OUT"
+
+                echo ">>> Done: ${MOD}"
+                echo ""
+              done
+
+              echo "=== All modalities evaluated ==="
+              echo "Dice CSVs at: $DICE_OUT"
+              for MOD in t1n t1c t2w t2f; do
+                CSV="$DICE_OUT/dice_${MOD}.csv"
+                if [ -f "$CSV" ]; then
+                  echo "--- $MOD ---"
+                  head -1 "$CSV"
+                  tail -n +2 "$CSV" | awk -F',' '
+                    NR>0 {
+                      n++
+                      if ($2 != "nan" && $2 != "") { wt+=$2; wt_n++ }
+                      if ($3 != "nan" && $3 != "") { tc+=$3; tc_n++ }
+                      if ($4 != "nan" && $4 != "") { et+=$4; et_n++ }
+                    }
+                    END {
+                      printf "  Mean  WT=%.4f (n=%d)  TC=%.4f (n=%d)  ET=%.4f (n=%d)  (total=%d)\n",
+                        (wt_n>0 ? wt/wt_n : 0), wt_n,
+                        (tc_n>0 ? tc/tc_n : 0), tc_n,
+                        (et_n>0 ? et/et_n : 0), et_n,
+                        n
+                    }
+                  '
+                fi
+              done
+
+          resources:
+            requests:
+              memory: "24Gi"
+              cpu: "8"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "32Gi"
+              cpu: "10"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "100Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 24Gi

@@ -56,6 +56,16 @@ train_modality() {
         if [ -n "$latest" ]; then
             RESUME_ARG="--resume_checkpoint $latest"
             echo "    Auto-resuming from: $latest"
+        elif [ -n "${TRAINING_PHASE:-}" ] && [ "${TRAINING_PHASE}" -gt 1 ]; then
+            # Fallback: no step-numbered checkpoint found — use previous phase best.
+            # parse_resume_step_from_filename will read the .step sidecar to get the
+            # correct resume_step so the loop runs only the remaining steps.
+            local prev_phase=$((TRAINING_PHASE - 1))
+            local phase_best="$CKPT_DIR/checkpoints/brats_${mod}_phase${prev_phase}_best.pt"
+            if [ -f "$phase_best" ]; then
+                RESUME_ARG="--resume_checkpoint $phase_best"
+                echo "    Falling back to phase-${prev_phase} best: $phase_best"
+            fi
         fi
     fi
 
