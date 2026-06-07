@@ -72,13 +72,13 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "8Gi"
-              cpu: "4"
+              memory: "20Gi"
+              cpu: "6"
               nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "9Gi"
-              cpu: "4"
+              memory: "24Gi"
+              cpu: "7"
               nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
           volumeMounts:
@@ -152,12 +152,12 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "16Gi"
+              memory: "20Gi"
               cpu: "6"
               nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "19Gi"
+              memory: "24Gi"
               cpu: "7"
               nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
@@ -232,12 +232,12 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "16Gi"
+              memory: "20Gi"
               cpu: "6"
               nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "19Gi"
+              memory: "24Gi"
               cpu: "7"
               nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
@@ -312,12 +312,12 @@ spec:
                   key: entity
           resources:
             requests:
-              memory: "16Gi"
+              memory: "20Gi"
               cpu: "6"
               nvidia.com/a100: "1"
               ephemeral-storage: "0"
             limits:
-              memory: "19Gi"
+              memory: "24Gi"
               cpu: "7"
               nvidia.com/a100: "1"
               ephemeral-storage: "50Gi"
