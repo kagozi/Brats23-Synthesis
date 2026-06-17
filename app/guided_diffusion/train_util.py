@@ -9,11 +9,6 @@ import torch as th
 import torch.distributed as dist
 import torch.utils.tensorboard
 from torch.optim import AdamW
-try:
-    import bitsandbytes as bnb
-    _HAS_BNB = True
-except ImportError:
-    _HAS_BNB = False
 import torch.cuda.amp as amp
 import wandb
 
@@ -120,14 +115,7 @@ class TrainLoop:
             
             self._load_and_sync_parameters()
 
-            if _HAS_BNB:
-                print("[Optimizer] Using 8-bit Adam (bitsandbytes) to reduce GPU memory.", flush=True)
-                self.opt = bnb.optim.Adam8bit(
-                    self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay
-                )
-            else:
-                print("[Optimizer] bitsandbytes not found, falling back to AdamW.", flush=True)
-                self.opt = AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.opt = AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
             if self.resume_step:
                 print("Resume Step: " + str(self.resume_step))
                 self._load_optimizer_state()

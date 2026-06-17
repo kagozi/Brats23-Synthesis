@@ -87,6 +87,9 @@ train_modality() {
         --sample_schedule=$STRATEGY \
         --noise_schedule=linear \
         --dims=3 \
+        --resample_2d=False \
+        --rescale_learned_sigmas=False \
+        --rescale_timesteps=False \
         --batch_size=2 \
         --num_groups=32 \
         --in_channels=32 \
