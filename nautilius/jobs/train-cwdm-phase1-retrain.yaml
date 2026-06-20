@@ -1,0 +1,345 @@
+# nautilius/jobs/train-cwdm-phase1-retrain.yaml
+#
+# Fast-CWDM — RETRAIN from scratch with corrected config.
+# Trains all 4 modalities in parallel, phase 1: 0 → 200k steps.
+#
+# Key fixes vs original training run:
+#   - predict_xstart=True  (was False — root cause of T1c/T2f failures)
+#   - use_fp16=False        (was True  — gradient loss in wavelet domain)
+#   - batch_size=2          (was 1)
+#   - resample_2d=False     (was True  — wrong 3D stride)
+#   - AdamW optimizer       (was 8-bit Adam via bitsandbytes)
+#
+# Uses CHECKPOINT_DIR=/pvc/checkpoints/cwdm_retrain (fresh directory,
+# no old checkpoints) to guarantee training starts from scratch.
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/train-cwdm-phase1-retrain.yaml
+#
+# Monitor:
+#   kubectl logs -f job/retrain-cwdm-p1-t1n
+#   kubectl logs -f job/retrain-cwdm-p1-t1c
+#   kubectl logs -f job/retrain-cwdm-p1-t2w
+#   kubectl logs -f job/retrain-cwdm-p1-t2f
+#
+# Delete:
+#   kubectl delete -f nautilius/jobs/train-cwdm-phase1-retrain.yaml
+
+# =============================================================================
+# t1n
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrain-cwdm-p1-t1n
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: trainer
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: TRAIN_MODALITY
+              value: "t1n"
+            - name: SAMPLE_STRATEGY
+              value: "sampled"
+            - name: TIMESTEPS
+              value: "100"
+            - name: TRAIN_DATA_DIR
+              value: "/pvc/data/brats23/train"
+            - name: CHECKPOINT_DIR
+              value: "/pvc/checkpoints/cwdm_retrain"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: TRAINING_PHASE
+              value: "1"
+            - name: LR_ANNEAL_STEPS
+              value: "600000"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          resources:
+            requests:
+              memory: "20Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+
+---
+# =============================================================================
+# t1c
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrain-cwdm-p1-t1c
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: trainer
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: TRAIN_MODALITY
+              value: "t1c"
+            - name: SAMPLE_STRATEGY
+              value: "sampled"
+            - name: TIMESTEPS
+              value: "100"
+            - name: TRAIN_DATA_DIR
+              value: "/pvc/data/brats23/train"
+            - name: CHECKPOINT_DIR
+              value: "/pvc/checkpoints/cwdm_retrain"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: TRAINING_PHASE
+              value: "1"
+            - name: LR_ANNEAL_STEPS
+              value: "600000"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          resources:
+            requests:
+              memory: "20Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+
+---
+# =============================================================================
+# t2w
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrain-cwdm-p1-t2w
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: trainer
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: TRAIN_MODALITY
+              value: "t2w"
+            - name: SAMPLE_STRATEGY
+              value: "sampled"
+            - name: TIMESTEPS
+              value: "100"
+            - name: TRAIN_DATA_DIR
+              value: "/pvc/data/brats23/train"
+            - name: CHECKPOINT_DIR
+              value: "/pvc/checkpoints/cwdm_retrain"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: TRAINING_PHASE
+              value: "1"
+            - name: LR_ANNEAL_STEPS
+              value: "600000"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          resources:
+            requests:
+              memory: "20Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+
+---
+# =============================================================================
+# t2f
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrain-cwdm-p1-t2f
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: trainer
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          env:
+            - name: TRAIN_MODALITY
+              value: "t2f"
+            - name: SAMPLE_STRATEGY
+              value: "sampled"
+            - name: TIMESTEPS
+              value: "100"
+            - name: TRAIN_DATA_DIR
+              value: "/pvc/data/brats23/train"
+            - name: CHECKPOINT_DIR
+              value: "/pvc/checkpoints/cwdm_retrain"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: TRAINING_PHASE
+              value: "1"
+            - name: LR_ANNEAL_STEPS
+              value: "600000"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          resources:
+            requests:
+              memory: "20Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi

@@ -1,0 +1,108 @@
+# nautilius/jobs/nextcloud-upload-segmentation.yaml
+#
+# Uploads the pre-built segmentation_all_conditions.zip to Nextcloud
+# and creates a public share link.
+#
+# Deploy:  kubectl apply  -f nautilius/jobs/nextcloud-upload-segmentation.yaml
+# Monitor: kubectl logs -f job/nextcloud-upload-segmentation -n gai-lina-group
+# Delete:  kubectl delete -f nautilius/jobs/nextcloud-upload-segmentation.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nextcloud-upload-segmentation
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: uploader
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              ZIP_PATH="/pvc/outputs/segmentation_all_conditions.zip"
+              NC_BASE="https://nextcloud.nrp-nautilus.io"
+              NC_DAV="${NC_BASE}/remote.php/dav/files/${NC_USER}"
+              REMOTE_FILE="segmentation_all_conditions.zip"
+
+              echo "=== Segmentation zip upload to Nextcloud ==="
+              ls -lh "$ZIP_PATH"
+
+              echo ""
+              echo ">>> Deleting any partial file on Nextcloud (ignore errors)..."
+              curl -s -X DELETE \
+                -u "${NC_USER}:${NC_PASS}" \
+                "${NC_DAV}/${REMOTE_FILE}" || true
+
+              echo ">>> Waiting 10s before upload..."
+              sleep 10
+
+              echo ">>> Uploading ${REMOTE_FILE} ..."
+              curl -f -T "$ZIP_PATH" \
+                -u "${NC_USER}:${NC_PASS}" \
+                "${NC_DAV}/${REMOTE_FILE}" \
+                --progress-bar \
+                --retry 5 \
+                --retry-delay 60
+
+              echo ""
+              echo ">>> Creating public share link..."
+              printf '%s\n' \
+                'import sys, json' \
+                'r = json.load(sys.stdin)' \
+                'meta = r.get("ocs", {}).get("meta", {})' \
+                'data = r.get("ocs", {}).get("data", {})' \
+                'if meta.get("status") == "ok":' \
+                '    print("")' \
+                '    print("============================================================")' \
+                '    print(" Share link ready!")' \
+                '    print(" URL: " + data.get("url", ""))' \
+                '    print(" Send this to your supervisor.")' \
+                '    print("============================================================")' \
+                'else:' \
+                '    print("Share status: " + str(meta.get("status")) + "  " + str(meta.get("message")))' \
+                '    print(json.dumps(r, indent=2))' \
+                > /tmp/share.py
+              curl -s -X POST \
+                -u "${NC_USER}:${NC_PASS}" \
+                -H "OCS-APIRequest: true" \
+                -H "Accept: application/json" \
+                -d "path=/${REMOTE_FILE}&shareType=3&permissions=1" \
+                "${NC_BASE}/ocs/v2.php/apps/files_sharing/api/v1/shares" \
+                | python3 /tmp/share.py
+          env:
+            - name: NC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: username
+            - name: NC_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: password
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "2"
+              ephemeral-storage: "0"
+            limits:
+              memory: "4Gi"
+              cpu: "4"
+              ephemeral-storage: "10Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc

@@ -1,0 +1,190 @@
+# nautilius/jobs/nnunet-allreal-and-package.yaml
+#
+# Step 1: Run nnUNet (Dataset137, fold 5) on all REAL BraTS 2023 test modalities.
+# Step 2: Package all 5 segmentation conditions into a zip + upload to Nextcloud.
+#
+# Zip folder names:
+#   seg_all_real/           all 4 modalities real (computed here)
+#   seg_T1_synthesized/     T1n synthesized + 3 real (phase 3)
+#   seg_T2_synthesized/     T2w synthesized + 3 real (phase 3)
+#   seg_T1Gd_synthesized/   T1c synthesized + 3 real (phase 3)
+#   seg_FLAIR_synthesized/  T2f synthesized + 3 real (phase 3)
+#
+# Deploy:  kubectl apply  -f nautilius/jobs/nnunet-allreal-and-package.yaml
+# Monitor: kubectl logs -f job/nnunet-allreal-and-package -n gai-lina-group
+# Delete:  kubectl delete -f nautilius/jobs/nnunet-allreal-and-package.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nnunet-allreal-and-package
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: runner
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              export nnUNet_raw="/pvc/nnunet/raw"
+              export nnUNet_preprocessed="/pvc/nnunet/preprocessed"
+              export nnUNet_results="/pvc/nnunet/results"
+
+              TEST_DIR="/pvc/data/brats23/test"
+              IMAGES_ALL_REAL="/pvc/nnunet/imagesTs_all_real"
+              PRED_ALL_REAL="/pvc/nnunet/predictions_pretrained_phase3/all_real"
+              PRED_ROOT="/pvc/nnunet/predictions_pretrained_phase3"
+              ZIP_PATH="/pvc/outputs/segmentation_all_conditions.zip"
+              NC_BASE="https://nextcloud.nrp-nautilus.io"
+              NC_DAV="${NC_BASE}/remote.php/dav/files/${NC_USER}"
+              REMOTE_FILE="segmentation_all_conditions.zip"
+
+              # ── Step 1: Reformat all-real test data ──────────────────────────
+              echo "=== Step 1: Reformat all-real test data ==="
+              mkdir -p "$IMAGES_ALL_REAL"
+              N_EXISTING=$(ls "$IMAGES_ALL_REAL"/*_0000.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_EXISTING" -gt 0 ]; then
+                echo ">>> $N_EXISTING cases already reformatted — skipping."
+              else
+                echo ">>> Symlinking 4 real modalities for each test subject..."
+                for CASE_DIR in "$TEST_DIR"/*/; do
+                  CASE=$(basename "$CASE_DIR")
+                  ln -sf "${CASE_DIR}${CASE}-t1n.nii.gz" "${IMAGES_ALL_REAL}/${CASE}_0000.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t1c.nii.gz" "${IMAGES_ALL_REAL}/${CASE}_0001.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2w.nii.gz" "${IMAGES_ALL_REAL}/${CASE}_0002.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2f.nii.gz" "${IMAGES_ALL_REAL}/${CASE}_0003.nii.gz"
+                done
+                echo ">>> Done: $(ls ${IMAGES_ALL_REAL}/*_0000.nii.gz | wc -l) cases symlinked."
+              fi
+
+              # ── Step 2: nnUNet inference — all real ───────────────────────────
+              echo ""
+              echo "=== Step 2: nnUNet inference (all real modalities) ==="
+              mkdir -p "$PRED_ALL_REAL"
+              N_PREDS=$(ls "$PRED_ALL_REAL"/*.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_PREDS" -gt 0 ]; then
+                echo ">>> $N_PREDS predictions already exist — skipping."
+              else
+                echo ">>> Running nnUNetv2_predict (Dataset137, fold 5)..."
+                nnUNetv2_predict \
+                  -i "$IMAGES_ALL_REAL" \
+                  -o "$PRED_ALL_REAL" \
+                  -d 137 \
+                  -c 3d_fullres \
+                  -f 5
+                echo ">>> Inference complete: $(ls $PRED_ALL_REAL/*.nii.gz | wc -l) predictions."
+              fi
+
+              # ── Step 3: Package all 5 conditions into zip ────────────────────
+              echo ""
+              echo "=== Step 3: Packaging all 5 segmentation conditions ==="
+              mkdir -p "$(dirname $ZIP_PATH)"
+              printf '%s\n' \
+                'import os, zipfile, glob' \
+                'zip_path  = "/pvc/outputs/segmentation_all_conditions.zip"' \
+                'pred_root = "/pvc/nnunet/predictions_pretrained_phase3"' \
+                'conditions = [' \
+                '    ("seg_all_real",          pred_root + "/all_real"),' \
+                '    ("seg_T1_synthesized",    pred_root + "/t1n"),' \
+                '    ("seg_T2_synthesized",    pred_root + "/t2w"),' \
+                '    ("seg_T1Gd_synthesized",  pred_root + "/t1c"),' \
+                '    ("seg_FLAIR_synthesized", pred_root + "/t2f"),' \
+                ']' \
+                'total = 0' \
+                'with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:' \
+                '    for folder_name, src_dir in conditions:' \
+                '        files = sorted(glob.glob(src_dir + "/*.nii.gz"))' \
+                '        print("  " + folder_name + "/  <-  " + str(len(files)) + " files")' \
+                '        for f in files:' \
+                '            zf.write(f, folder_name + "/" + os.path.basename(f))' \
+                '            total += 1' \
+                'sz = round(os.path.getsize(zip_path) / 1e9, 2)' \
+                'print("Zip ready: " + str(total) + " files, " + str(sz) + " GB  -> " + zip_path)' \
+                > /tmp/pkg.py
+              python3 /tmp/pkg.py
+
+              # ── Step 4: Upload to Nextcloud ───────────────────────────────────
+              echo ""
+              echo "=== Step 4: Uploading to Nextcloud ==="
+              curl -f -T "$ZIP_PATH" \
+                -u "${NC_USER}:${NC_PASS}" \
+                "${NC_DAV}/${REMOTE_FILE}" \
+                --progress-bar \
+                --retry 3 \
+                --retry-delay 10
+
+              # ── Step 5: Create public share link ─────────────────────────────
+              echo ""
+              echo ">>> Creating public share link..."
+              printf '%s\n' \
+                'import sys, json' \
+                'r = json.load(sys.stdin)' \
+                'meta = r.get("ocs", {}).get("meta", {})' \
+                'data = r.get("ocs", {}).get("data", {})' \
+                'if meta.get("status") == "ok":' \
+                '    print("")' \
+                '    print("============================================================")' \
+                '    print(" Share link ready!")' \
+                '    print(" URL: " + data.get("url", ""))' \
+                '    print(" Send this to your supervisor.")' \
+                '    print("============================================================")' \
+                'else:' \
+                '    print("Share status: " + str(meta.get("status")) + "  " + str(meta.get("message")))' \
+                '    print(json.dumps(r, indent=2))' \
+                > /tmp/share.py
+              curl -s -X POST \
+                -u "${NC_USER}:${NC_PASS}" \
+                -H "OCS-APIRequest: true" \
+                -H "Accept: application/json" \
+                -d "path=/${REMOTE_FILE}&shareType=3&permissions=1" \
+                "${NC_BASE}/ocs/v2.php/apps/files_sharing/api/v1/shares" \
+                | python3 /tmp/share.py
+          env:
+            - name: NC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: username
+            - name: NC_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: password
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              memory: "20Gi"
+              cpu: "6"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "24Gi"
+              cpu: "7"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "50Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi

@@ -1,0 +1,135 @@
+# nautilius/jobs/nextcloud-upload-brats23.yaml
+#
+# Packages the BraTS 2023 dataset from the PVC and uploads it to Nextcloud.
+#
+# Steps:
+#   1. Create brats23_full.tar at /pvc/data/brats23_full.tar  (~27 GB, no recompression
+#      since all files are already .nii.gz)
+#   2. Upload the tar to Nextcloud via WebDAV
+#   3. Create a public share link and print it
+#
+# Deploy:
+#   kubectl apply -f nautilius/jobs/nextcloud-upload-brats23.yaml
+#
+# Monitor:
+#   kubectl logs -f job/nextcloud-upload-brats23 -n gai-lina-group
+#
+# Delete:
+#   kubectl delete -f nautilius/jobs/nextcloud-upload-brats23.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nextcloud-upload-brats23
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: uploader
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+
+              NC_BASE="https://nextcloud.nrp-nautilus.io"
+              NC_DAV="$NC_BASE/remote.php/dav/files/${NC_USER}"
+              TAR_PATH="/pvc/data/brats23_full.tar"
+              REMOTE_FILE="brats23_full.tar"
+
+              echo "================================================"
+              echo " BraTS 2023 → Nextcloud Upload"
+              echo "================================================"
+              echo " Source   : /pvc/data/brats23  (train + val + test)"
+              echo " Archive  : $TAR_PATH"
+              echo " Remote   : $NC_DAV/$REMOTE_FILE"
+              echo "================================================"
+
+              # ── Step 1: Create tar on PVC ─────────────────────
+              if [ -f "$TAR_PATH" ]; then
+                echo ">>> Archive already exists at $TAR_PATH — skipping tar step."
+                ls -lh "$TAR_PATH"
+              else
+                echo ">>> Creating tar archive (no recompression — files are already .nii.gz)..."
+                tar cf "$TAR_PATH" -C /pvc/data brats23
+                echo ">>> Archive created:"
+                ls -lh "$TAR_PATH"
+              fi
+
+              # ── Step 2: Upload to Nextcloud via WebDAV ────────
+              echo ""
+              echo ">>> Uploading to Nextcloud..."
+              curl -f -T "$TAR_PATH" \
+                -u "${NC_USER}:${NC_PASS}" \
+                "$NC_DAV/$REMOTE_FILE" \
+                --progress-bar \
+                --retry 3 \
+                --retry-delay 10
+
+              echo ""
+              echo ">>> Upload complete."
+
+              # ── Step 3: Create public share link ─────────────
+              echo ""
+              echo ">>> Creating public share link..."
+              SHARE_RESPONSE=$(curl -s -X POST \
+                -u "${NC_USER}:${NC_PASS}" \
+                -H "OCS-APIRequest: true" \
+                -H "Accept: application/json" \
+                -d "path=/${REMOTE_FILE}&shareType=3&permissions=1" \
+                "$NC_BASE/ocs/v2.php/apps/files_sharing/api/v1/shares")
+
+              echo "$SHARE_RESPONSE" | python3 -c "
+              import sys, json
+              r = json.load(sys.stdin)
+              ocs = r.get('ocs', {})
+              meta = ocs.get('meta', {})
+              data = ocs.get('data', {})
+              status = meta.get('status', 'unknown')
+              if status == 'ok':
+                  url = data.get('url', '')
+                  print('')
+                  print('================================================')
+                  print(' Share link created successfully!')
+                  print(f' URL: {url}')
+                  print(' Send this link to the student.')
+                  print('================================================')
+              else:
+                  msg = meta.get('message', '')
+                  # Link may already exist — try to find existing share
+                  print(f'Share creation status: {status} — {msg}')
+                  print('Raw response:', json.dumps(r, indent=2))
+              "
+          env:
+            - name: NC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: username
+            - name: NC_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-credentials
+                  key: password
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "2"
+              ephemeral-storage: "0"
+            limits:
+              memory: "4Gi"
+              cpu: "4"
+              ephemeral-storage: "10Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
