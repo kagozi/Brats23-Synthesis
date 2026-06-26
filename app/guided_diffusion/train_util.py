@@ -126,7 +126,7 @@ class TrainLoop:
 
     def _load_best_ssims(self):
         """Load best SSIMs from file if it exists"""
-        best_ssims_file = os.path.join(self.checkpoint_dir, 'best_ssims.txt')
+        best_ssims_file = os.path.join(self.checkpoint_dir, f'best_ssims_{self.contr}.txt')
         if os.path.exists(best_ssims_file):
             try:
                 with open(best_ssims_file, 'r') as f:
@@ -143,7 +143,7 @@ class TrainLoop:
 
     def _save_best_ssims(self):
         """Save best SSIMs to file"""
-        best_ssims_file = os.path.join(self.checkpoint_dir, 'best_ssims.txt')
+        best_ssims_file = os.path.join(self.checkpoint_dir, f'best_ssims_{self.contr}.txt')
         try:
             with open(best_ssims_file, 'w') as f:
                 for modality, ssim in self.best_ssims.items():

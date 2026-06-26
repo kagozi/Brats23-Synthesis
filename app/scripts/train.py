@@ -69,7 +69,10 @@ def main():
     datal = th.utils.data.DataLoader(ds,
                                      batch_size=args.batch_size,
                                      num_workers=args.num_workers,
-                                     shuffle=True,)
+                                     shuffle=True,
+                                     pin_memory=True,
+                                     persistent_workers=args.num_workers > 0,
+                                     prefetch_factor=4 if args.num_workers > 0 else None,)
     print("Start training...")
     TrainLoop(
         model=model,

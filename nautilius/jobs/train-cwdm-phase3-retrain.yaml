@@ -1,29 +1,20 @@
-# nautilius/jobs/train-cwdm-phase1-retrain.yaml
+# nautilius/jobs/train-cwdm-phase3-retrain.yaml
 #
-# Fast-CWDM — RETRAIN from scratch with corrected config.
-# Trains all 4 modalities in parallel, phase 1: 0 → 200k steps.
-#
-# Key fixes vs original training run:
-#   - predict_xstart=True  (was False — root cause of T1c/T2f failures)
-#   - use_fp16=False        (was True  — gradient loss in wavelet domain)
-#   - batch_size=2          (was 1)
-#   - resample_2d=False     (was True  — wrong 3D stride)
-#   - AdamW optimizer       (was 8-bit Adam via bitsandbytes)
-#
-# Uses CHECKPOINT_DIR=/pvc/checkpoints/cwdm_retrain (fresh directory,
-# no old checkpoints) to guarantee training starts from scratch.
+# Fast-CWDM RETRAIN — phase 3: 400k→600k steps.
+# Resumes from the phase 2 best checkpoint in cwdm_retrain via auto-resume in run.sh.
+# Saves brats_{mod}_phase3_best.pt at end of training.
 #
 # Deploy:
-#   kubectl apply -f nautilius/jobs/train-cwdm-phase1-retrain.yaml
+#   kubectl apply -f nautilius/jobs/train-cwdm-phase3-retrain.yaml
 #
 # Monitor:
-#   kubectl logs -f job/retrain-cwdm-p1-t1n
-#   kubectl logs -f job/retrain-cwdm-p1-t1c
-#   kubectl logs -f job/retrain-cwdm-p1-t2w
-#   kubectl logs -f job/retrain-cwdm-p1-t2f
+#   kubectl logs -f job/retrain-cwdm-p3-t1n -n gai-lina-group
+#   kubectl logs -f job/retrain-cwdm-p3-t1c -n gai-lina-group
+#   kubectl logs -f job/retrain-cwdm-p3-t2w -n gai-lina-group
+#   kubectl logs -f job/retrain-cwdm-p3-t2f -n gai-lina-group
 #
 # Delete:
-#   kubectl delete -f nautilius/jobs/train-cwdm-phase1-retrain.yaml
+#   kubectl delete -f nautilius/jobs/train-cwdm-phase3-retrain.yaml
 
 # =============================================================================
 # t1n
@@ -31,7 +22,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: retrain-cwdm-p1-t1n
+  name: retrain-cwdm-p3-t1n
   namespace: gai-lina-group
 spec:
   backoffLimit: 3
@@ -52,10 +43,10 @@ spec:
                   - key: job-name
                     operator: In
                     values:
-                      - retrain-cwdm-p1-t1n
-                      - retrain-cwdm-p1-t1c
-                      - retrain-cwdm-p1-t2w
-                      - retrain-cwdm-p1-t2f
+                      - retrain-cwdm-p3-t1n
+                      - retrain-cwdm-p3-t1c
+                      - retrain-cwdm-p3-t2w
+                      - retrain-cwdm-p3-t2f
               topologyKey: kubernetes.io/hostname
       containers:
         - name: trainer
@@ -77,9 +68,9 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "3"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "600000"
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: WANDB_API_KEY
@@ -124,7 +115,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: retrain-cwdm-p1-t1c
+  name: retrain-cwdm-p3-t1c
   namespace: gai-lina-group
 spec:
   backoffLimit: 3
@@ -145,10 +136,10 @@ spec:
                   - key: job-name
                     operator: In
                     values:
-                      - retrain-cwdm-p1-t1n
-                      - retrain-cwdm-p1-t1c
-                      - retrain-cwdm-p1-t2w
-                      - retrain-cwdm-p1-t2f
+                      - retrain-cwdm-p3-t1n
+                      - retrain-cwdm-p3-t1c
+                      - retrain-cwdm-p3-t2w
+                      - retrain-cwdm-p3-t2f
               topologyKey: kubernetes.io/hostname
       containers:
         - name: trainer
@@ -170,9 +161,9 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "3"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "600000"
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: WANDB_API_KEY
@@ -217,7 +208,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: retrain-cwdm-p1-t2w
+  name: retrain-cwdm-p3-t2w
   namespace: gai-lina-group
 spec:
   backoffLimit: 3
@@ -238,10 +229,10 @@ spec:
                   - key: job-name
                     operator: In
                     values:
-                      - retrain-cwdm-p1-t1n
-                      - retrain-cwdm-p1-t1c
-                      - retrain-cwdm-p1-t2w
-                      - retrain-cwdm-p1-t2f
+                      - retrain-cwdm-p3-t1n
+                      - retrain-cwdm-p3-t1c
+                      - retrain-cwdm-p3-t2w
+                      - retrain-cwdm-p3-t2f
               topologyKey: kubernetes.io/hostname
       containers:
         - name: trainer
@@ -263,9 +254,9 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "3"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "600000"
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: WANDB_API_KEY
@@ -310,7 +301,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: retrain-cwdm-p1-t2f
+  name: retrain-cwdm-p3-t2f
   namespace: gai-lina-group
 spec:
   backoffLimit: 3
@@ -331,10 +322,10 @@ spec:
                   - key: job-name
                     operator: In
                     values:
-                      - retrain-cwdm-p1-t1n
-                      - retrain-cwdm-p1-t1c
-                      - retrain-cwdm-p1-t2w
-                      - retrain-cwdm-p1-t2f
+                      - retrain-cwdm-p3-t1n
+                      - retrain-cwdm-p3-t1c
+                      - retrain-cwdm-p3-t2w
+                      - retrain-cwdm-p3-t2f
               topologyKey: kubernetes.io/hostname
       containers:
         - name: trainer
@@ -356,9 +347,9 @@ spec:
             - name: WANDB_MODE
               value: "online"
             - name: TRAINING_PHASE
-              value: "1"
+              value: "3"
             - name: LR_ANNEAL_STEPS
-              value: "200000"
+              value: "600000"
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: WANDB_API_KEY

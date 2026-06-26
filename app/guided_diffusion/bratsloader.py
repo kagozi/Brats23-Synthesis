@@ -55,7 +55,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
         # Load data
         if 't1n' in filedict:
             try:
-                t1n_np = nibabel.load(filedict['t1n']).get_fdata()
+                t1n_np = nibabel.load(filedict['t1n']).get_fdata(dtype=np.float32)
                 t1n_np_clipnorm = clip_and_normalize(t1n_np)
                 t1n = torch.zeros(1, 240, 240, 160)
                 t1n[:, :, :, :155] = torch.tensor(t1n_np_clipnorm)
@@ -70,7 +70,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
 
         if 't1c' in filedict:
             try:
-                t1c_np = nibabel.load(filedict['t1c']).get_fdata()
+                t1c_np = nibabel.load(filedict['t1c']).get_fdata(dtype=np.float32)
                 t1c_np_clipnorm = clip_and_normalize(t1c_np)
                 t1c = torch.zeros(1, 240, 240, 160)
                 t1c[:, :, :, :155] = torch.tensor(t1c_np_clipnorm)
@@ -85,7 +85,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
 
         if 't2w' in filedict:
             try:
-                t2w_np = nibabel.load(filedict['t2w']).get_fdata()
+                t2w_np = nibabel.load(filedict['t2w']).get_fdata(dtype=np.float32)
                 t2w_np_clipnorm = clip_and_normalize(t2w_np)
                 t2w = torch.zeros(1, 240, 240, 160)
                 t2w[:, :, :, :155] = torch.tensor(t2w_np_clipnorm)
@@ -100,7 +100,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
 
         if 't2f' in filedict:
             try:
-                t2f_np = nibabel.load(filedict['t2f']).get_fdata()
+                t2f_np = nibabel.load(filedict['t2f']).get_fdata(dtype=np.float32)
                 t2f_np_clipnorm = clip_and_normalize(t2f_np)
                 t2f = torch.zeros(1, 240, 240, 160)
                 t2f[:, :, :, :155] = torch.tensor(t2f_np_clipnorm)
@@ -134,7 +134,7 @@ class BRATSVolumes(torch.utils.data.Dataset):
 
 
 def clip_and_normalize(img):
-    img_clipped = np.clip(img, np.quantile(img, 0.001), np.quantile(img, 0.999))
-    img_normalized = (img_clipped - np.min(img_clipped)) / (np.max(img_clipped) - np.min(img_clipped))
-
+    pmin, pmax = np.quantile(img, [0.001, 0.999])
+    img_clipped = np.clip(img, pmin, pmax)
+    img_normalized = (img_clipped - pmin) / (pmax - pmin) if pmax > pmin else np.zeros_like(img_clipped)
     return img_normalized
