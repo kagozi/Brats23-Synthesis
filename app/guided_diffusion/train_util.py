@@ -164,6 +164,10 @@ class TrainLoop:
                         resume_checkpoint, map_location=dist_util.dev()
                     )
                 )
+            # Seed best_checkpoints so end-of-phase copy works even if the
+            # training loop exits immediately (resume_step >= lr_anneal_steps).
+            if self.contr not in self.best_checkpoints:
+                self.best_checkpoints[self.contr] = resume_checkpoint
 
         dist_util.sync_params(self.model.parameters())
 
