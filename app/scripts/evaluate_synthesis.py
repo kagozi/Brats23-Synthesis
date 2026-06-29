@@ -143,8 +143,7 @@ def main():
     parser.add_argument("--gt_dir", default="/pvc/data/brats23/test",
                         help="BraTS 2023 test split (contains {case}/{case}-seg.nii.gz)")
     parser.add_argument("--synthesized_modality", required=True,
-                        choices=["t1n", "t1c", "t2w", "t2f"],
-                        help="Which modality was synthesized (for logging)")
+                        help="Label for this evaluation run (e.g. t1n, all_real, val_all_real)")
     parser.add_argument("--output_dir", default="/pvc/outputs/cwdm/dice",
                         help="Where to write the per-subject CSV")
     parser.add_argument("--pred_ncr_label", type=int, default=1,

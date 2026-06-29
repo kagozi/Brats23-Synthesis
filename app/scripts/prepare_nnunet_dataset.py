@@ -52,13 +52,17 @@ def verify_labels(seg_path: str) -> None:
         print(f"  [WARN] Unexpected labels {unexpected} in {seg_path}")
 
 
-def convert_case(case_dir: str, images_out: str, labels_out: str) -> bool:
+def convert_case(case_dir: str, images_out: str, labels_out: str,
+                 use_symlinks: bool = False) -> bool:
     """
     Convert one BraTS 2023 case to nnUNet format.
     Returns True on success.
 
     Atomic: all source files are verified to exist before any copying begins,
     so imagesTr/ and labelsTr/ always contain the same set of cases.
+
+    use_symlinks=True creates absolute symlinks instead of copies, saving ~125 GB
+    on the PVC when used with a 1000+ case training set.
     """
     case_name = os.path.basename(case_dir)
 
@@ -76,13 +80,21 @@ def convert_case(case_dir: str, images_out: str, labels_out: str) -> bool:
             return False
         mod_srcs[suffix] = src
 
-    # --- all files present: copy atomically ---
+    def _write(src: str, dst: str) -> None:
+        if use_symlinks:
+            if os.path.exists(dst) or os.path.islink(dst):
+                os.remove(dst)
+            os.symlink(os.path.abspath(src), dst)
+        else:
+            shutil.copy2(src, dst)
+
+    # --- all files present: write (copy or symlink) atomically ---
     for suffix, src in mod_srcs.items():
-        shutil.copy2(src, os.path.join(images_out, f"{case_name}{suffix}.nii.gz"))
+        _write(src, os.path.join(images_out, f"{case_name}{suffix}.nii.gz"))
 
     verify_labels(seg_src)
-    # BraTS 2023 labels are already 0/1/2/3 — copy directly, no remapping
-    shutil.copy2(seg_src, os.path.join(labels_out, f"{case_name}.nii.gz"))
+    # BraTS 2023 labels are already 0/1/2/3 — no remapping needed
+    _write(seg_src, os.path.join(labels_out, f"{case_name}.nii.gz"))
 
     return True
 
@@ -138,6 +150,11 @@ def main():
         default=os.environ.get("nnUNet_raw", "/pvc/nnunet/raw"),
         help="nnUNet_raw root (env var nnUNet_raw)",
     )
+    parser.add_argument(
+        "--use_symlinks",
+        action="store_true",
+        help="Create absolute symlinks instead of copies (saves ~125 GB on PVC)",
+    )
     args = parser.parse_args()
 
     output_dir  = os.path.join(args.nnunet_raw, DATASET_NAME)
@@ -154,7 +171,8 @@ def main():
 
     ok = 0
     for name in case_dirs:
-        if convert_case(os.path.join(args.input_dir, name), images_out, labels_out):
+        if convert_case(os.path.join(args.input_dir, name), images_out, labels_out,
+                        use_symlinks=args.use_symlinks):
             ok += 1
 
     print(f"\nConverted {ok}/{len(case_dirs)} cases → {output_dir}")

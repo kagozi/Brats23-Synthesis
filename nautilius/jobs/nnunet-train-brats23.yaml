@@ -1,0 +1,273 @@
+# nautilius/jobs/nnunet-train-brats23.yaml
+#
+# Train nnUNet v2 (Dataset001_BraTS2023_GLI) from scratch on the BraTS 2023
+# training split, then report WT/TC/ET Dice on both the validation and test splits
+# using all-real modalities.
+#
+# Pipeline:
+#   1.  Prepare Dataset001 (imagesTr/labelsTr/dataset.json) — symlinks, no copies
+#   2.  Prepare all-real imagesVal (symlinks to /pvc/data/brats23/val)
+#   3.  Prepare all-real imagesTs  (symlinks to /pvc/data/brats23/test)
+#   4.  nnUNetv2_plan_and_preprocess -d 001
+#   5.  Train folds 0-4 sequentially (each resumable via checkpoint_final.pth)
+#   6.  nnUNetv2_find_best_configuration
+#   7.  Predict on val set  (ensemble of all 5 folds)
+#   8.  Predict on test set (ensemble of all 5 folds)
+#   9.  Evaluate val  Dice → /pvc/outputs/segmentation_brats23/dice_val/
+#   10. Evaluate test Dice → /pvc/outputs/segmentation_brats23/dice_test/
+#
+# All steps are idempotent — a restarted pod skips already-completed work.
+#
+# Expected wall-clock time: ~3-5 days (5 × ~15-20 h per fold on A100)
+#
+# Deploy:  kubectl apply  -f nautilius/jobs/nnunet-train-brats23.yaml
+# Monitor: kubectl logs -f job/nnunet-train-brats23 -n gai-lina-group
+# Delete:  kubectl delete -f nautilius/jobs/nnunet-train-brats23.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nnunet-train-brats23
+  namespace: gai-lina-group
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: PreferNoSchedule
+      containers:
+        - name: trainer
+          image: ghcr.io/kagozi/brats23-cwdm:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              export nnUNet_raw="/pvc/nnunet/raw"
+              export nnUNet_preprocessed="/pvc/nnunet/preprocessed"
+              export nnUNet_results="/pvc/nnunet/results"
+
+              DATASET_ID="001"
+              DATASET_NAME="Dataset${DATASET_ID}_BraTS2023_GLI"
+              TRAIN_DIR="/pvc/data/brats23/train"
+              VAL_DIR="/pvc/data/brats23/val"
+              TEST_DIR="/pvc/data/brats23/test"
+              IMAGES_TR="$nnUNet_raw/$DATASET_NAME/imagesTr"
+              IMAGES_VAL="/pvc/nnunet/imagesVal_all_real"
+              IMAGES_TEST="/pvc/nnunet/imagesTs_all_real"
+              PRED_VAL="/pvc/nnunet/predictions_brats23/val"
+              PRED_TEST="/pvc/nnunet/predictions_brats23/test"
+              DICE_VAL="/pvc/outputs/segmentation_brats23/dice_val"
+              DICE_TEST="/pvc/outputs/segmentation_brats23/dice_test"
+              MODEL_DIR="$nnUNet_results/$DATASET_NAME/nnUNetTrainer__nnUNetPlans__3d_fullres"
+
+              # ── Step 1: Prepare Dataset001 (symlinks — saves ~125 GB) ──────────
+              echo "=== Step 1: Prepare Dataset001_BraTS2023_GLI ==="
+              N_TR=$(ls "$IMAGES_TR"/*_0000.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_TR" -gt 0 ]; then
+                echo ">>> $N_TR training cases already prepared — skipping."
+              else
+                python scripts/prepare_nnunet_dataset.py \
+                  --input_dir   "$TRAIN_DIR" \
+                  --nnunet_raw  "$nnUNet_raw" \
+                  --use_symlinks
+              fi
+
+              # ── Step 2: Prepare all-real val images ───────────────────────────
+              echo ""
+              echo "=== Step 2: Prepare all-real val images ==="
+              N_VAL=$(ls "$IMAGES_VAL"/*_0000.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_VAL" -gt 0 ]; then
+                echo ">>> $N_VAL val cases already prepared — skipping."
+              else
+                mkdir -p "$IMAGES_VAL"
+                for CASE_DIR in "$VAL_DIR"/*/; do
+                  CASE=$(basename "$CASE_DIR")
+                  ln -sf "${CASE_DIR}${CASE}-t1n.nii.gz" "${IMAGES_VAL}/${CASE}_0000.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t1c.nii.gz" "${IMAGES_VAL}/${CASE}_0001.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2w.nii.gz" "${IMAGES_VAL}/${CASE}_0002.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2f.nii.gz" "${IMAGES_VAL}/${CASE}_0003.nii.gz"
+                done
+                echo ">>> $(ls $IMAGES_VAL/*_0000.nii.gz | wc -l) val cases linked."
+              fi
+
+              # ── Step 3: Prepare all-real test images ──────────────────────────
+              echo ""
+              echo "=== Step 3: Prepare all-real test images ==="
+              N_TEST=$(ls "$IMAGES_TEST"/*_0000.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_TEST" -gt 0 ]; then
+                echo ">>> $N_TEST test cases already prepared — skipping."
+              else
+                mkdir -p "$IMAGES_TEST"
+                for CASE_DIR in "$TEST_DIR"/*/; do
+                  CASE=$(basename "$CASE_DIR")
+                  ln -sf "${CASE_DIR}${CASE}-t1n.nii.gz" "${IMAGES_TEST}/${CASE}_0000.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t1c.nii.gz" "${IMAGES_TEST}/${CASE}_0001.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2w.nii.gz" "${IMAGES_TEST}/${CASE}_0002.nii.gz"
+                  ln -sf "${CASE_DIR}${CASE}-t2f.nii.gz" "${IMAGES_TEST}/${CASE}_0003.nii.gz"
+                done
+                echo ">>> $(ls $IMAGES_TEST/*_0000.nii.gz | wc -l) test cases linked."
+              fi
+
+              # ── Step 4: Plan and preprocess ───────────────────────────────────
+              echo ""
+              echo "=== Step 4: Plan and preprocess ==="
+              if [ -d "$nnUNet_preprocessed/$DATASET_NAME" ]; then
+                echo ">>> Preprocessed data found — skipping."
+              else
+                nnUNetv2_plan_and_preprocess \
+                  -d "$DATASET_ID" \
+                  --verify_dataset_integrity \
+                  -np 4
+              fi
+
+              # ── Step 5: Train folds 0-4 sequentially ─────────────────────────
+              echo ""
+              echo "=== Step 5: Train nnUNet 3d_fullres (5 folds) ==="
+              for FOLD in 0 1 2 3 4; do
+                echo ""
+                echo "--- Fold $FOLD ---"
+                if [ -f "$MODEL_DIR/fold_${FOLD}/checkpoint_final.pth" ]; then
+                  echo ">>> Fold $FOLD already trained — skipping."
+                else
+                  nnUNetv2_train "$DATASET_ID" 3d_fullres "$FOLD"
+                fi
+              done
+
+              # ── Step 6: Find best configuration ──────────────────────────────
+              echo ""
+              echo "=== Step 6: Find best configuration ==="
+              nnUNetv2_find_best_configuration "$DATASET_ID" -c 3d_fullres
+
+              # ── Step 7: Predict on val set (5-fold ensemble) ──────────────────
+              echo ""
+              echo "=== Step 7: Predict on val set ==="
+              mkdir -p "$PRED_VAL"
+              N_VAL_PREDS=$(ls "$PRED_VAL"/*.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_VAL_PREDS" -gt 0 ]; then
+                echo ">>> $N_VAL_PREDS val predictions already exist — skipping."
+              else
+                nnUNetv2_predict \
+                  -i  "$IMAGES_VAL" \
+                  -o  "$PRED_VAL" \
+                  -d  "$DATASET_ID" \
+                  -c  3d_fullres \
+                  -f  0 1 2 3 4
+              fi
+
+              # ── Step 8: Predict on test set (5-fold ensemble) ─────────────────
+              echo ""
+              echo "=== Step 8: Predict on test set ==="
+              mkdir -p "$PRED_TEST"
+              N_TEST_PREDS=$(ls "$PRED_TEST"/*.nii.gz 2>/dev/null | wc -l)
+              if [ "$N_TEST_PREDS" -gt 0 ]; then
+                echo ">>> $N_TEST_PREDS test predictions already exist — skipping."
+              else
+                nnUNetv2_predict \
+                  -i  "$IMAGES_TEST" \
+                  -o  "$PRED_TEST" \
+                  -d  "$DATASET_ID" \
+                  -c  3d_fullres \
+                  -f  0 1 2 3 4
+              fi
+
+              # ── Step 9: Evaluate val Dice ─────────────────────────────────────
+              echo ""
+              echo "=== Step 9: Val Dice (WT/TC/ET) ==="
+              mkdir -p "$DICE_VAL"
+              python scripts/evaluate_synthesis.py \
+                --pred_dir             "$PRED_VAL" \
+                --gt_dir               "$VAL_DIR" \
+                --synthesized_modality val_all_real \
+                --output_dir           "$DICE_VAL" \
+                --pred_ncr_label       1 \
+                --pred_et_label        3
+
+              # ── Step 10: Evaluate test Dice ───────────────────────────────────
+              echo ""
+              echo "=== Step 10: Test Dice (WT/TC/ET) ==="
+              mkdir -p "$DICE_TEST"
+              python scripts/evaluate_synthesis.py \
+                --pred_dir             "$PRED_TEST" \
+                --gt_dir               "$TEST_DIR" \
+                --synthesized_modality test_all_real \
+                --output_dir           "$DICE_TEST" \
+                --pred_ncr_label       1 \
+                --pred_et_label        3
+
+              # ── Summary ───────────────────────────────────────────────────────
+              echo ""
+              echo "=== Training and evaluation complete ==="
+              for SPLIT in val test; do
+                CSV_DIR="/pvc/outputs/segmentation_brats23/dice_${SPLIT}"
+                CSV="$CSV_DIR/dice_${SPLIT}_all_real.csv"
+                if [ -f "$CSV" ]; then
+                  echo "--- $SPLIT ---"
+                  tail -n +2 "$CSV" | awk -F',' '
+                    { n++
+                      if ($2 != "nan" && $2 != "") { wt+=$2; wt_n++ }
+                      if ($3 != "nan" && $3 != "") { tc+=$3; tc_n++ }
+                      if ($4 != "nan" && $4 != "") { et+=$4; et_n++ }
+                    }
+                    END {
+                      printf "  WT=%.4f (n=%d)  TC=%.4f (n=%d)  ET=%.4f (n=%d)\n",
+                        (wt_n>0 ? wt/wt_n : 0), wt_n,
+                        (tc_n>0 ? tc/tc_n : 0), tc_n,
+                        (et_n>0 ? et/et_n : 0), et_n
+                    }
+                  '
+                fi
+              done
+
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: nnUNet_raw
+              value: "/pvc/nnunet/raw"
+            - name: nnUNet_preprocessed
+              value: "/pvc/nnunet/preprocessed"
+            - name: nnUNet_results
+              value: "/pvc/nnunet/results"
+            - name: WANDB_PROJECT
+              value: "brats2023-cwdm"
+            - name: WANDB_MODE
+              value: "online"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api_key
+            - name: WANDB_ENTITY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: entity
+          resources:
+            requests:
+              memory: "28Gi"
+              cpu: "8"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "0"
+            limits:
+              memory: "36Gi"
+              cpu: "10"
+              nvidia.com/a100: "1"
+              ephemeral-storage: "100Gi"
+          volumeMounts:
+            - name: brats23-vol
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: brats23-vol
+          persistentVolumeClaim:
+            claimName: brats23-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 24Gi
